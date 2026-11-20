@@ -17,6 +17,12 @@ for humans.
 
 > Early development.
 
+## How much does it save?
+
+On a 4,000-line synthetic handbook (~59k tokens if read whole), answering
+seven typical questions with mdpeek took 0.2–1.1% of the tokens of reading
+the file. See [evals/report.md](evals/report.md) for the scenarios.
+
 ## Install
 
 ```sh

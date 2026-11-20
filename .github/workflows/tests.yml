@@ -68,3 +68,22 @@ jobs:
 
       - name: Run tests with duckdb
         run: uv run nox -s tests_duckdb
+
+  eval:
+    name: eval
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # hatch-vcs needs tags to derive the version
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install Python
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Check efficiency eval and handbook fixture
+        run: uv run nox -s eval

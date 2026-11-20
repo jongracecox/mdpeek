@@ -43,3 +43,17 @@ def tests_duckdb(session: nox.Session) -> None:
         env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
     )
     session.run("pytest", *session.posargs)
+
+
+@nox.session(python=PYTHON_VERSIONS[-1])
+def eval(session: nox.Session) -> None:
+    """Check the efficiency eval against evals/baseline.json, and that the handbook is fresh."""
+    session.run_install(
+        "uv",
+        "sync",
+        "--active",
+        "--group=dev",
+        env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
+    )
+    session.run("python", "scripts/gen_handbook.py", "--check")
+    session.run("python", "scripts/eval.py", "--check")

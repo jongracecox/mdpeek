@@ -8,6 +8,8 @@ from mdpeek import cache as cache_module
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SMALL_FIXTURES = sorted((FIXTURES / "small").glob("*.md"))
+HANDBOOK = FIXTURES / "large" / "handbook.md"
+ALL_FIXTURES = [*SMALL_FIXTURES, HANDBOOK]
 
 
 def read_fixture(path: Path) -> str:

@@ -1,0 +1,66 @@
+# Efficiency scenarios for scripts/eval.py.
+#
+# Each scenario is a question about tests/fixtures/large/handbook.md, the
+# mdpeek calls an agent would make to answer it, and text the final call's
+# output must contain. The eval compares what those calls cost in context
+# with reading the whole file. SQL scenarios pin the sqlite engine so results
+# never depend on what is installed.
+
+document = "tests/fixtures/large/handbook.md"
+
+[[scenario]]
+name = "chapter-list"
+question = "What chapters does the handbook have?"
+steps = [["--structure", "-d", "1"]]
+expect = "[S9] API Reference"
+
+[[scenario]]
+name = "retry-limit"
+question = "What is the default network retry limit?"
+steps = [
+  ["--structure", "-d", "2"],
+  ["--structure", "-s", "S4.2"],
+  ["-s", "S4.2.1.1", "--full"],
+]
+expect = "default retry limit is 7 attempts"
+
+[[scenario]]
+name = "rotate-keys"
+question = "How do I rotate API keys?"
+steps = [
+  ["--structure", "-d", "2"],
+  ["--structure", "-s", "S7.2"],
+  ["-s", "S7.2.1", "--full"],
+]
+expect = "lantern keys rotate --all"
+
+[[scenario]]
+name = "error-code"
+question = "What does error E104 mean?"
+steps = [["--tables"], ["--table", "T5", "--full"]]
+expect = "Depot sync timeout"
+
+[[scenario]]
+name = "depot-capacity"
+question = "What is the capacity of depot D-0217?"
+steps = [
+  ["--structure", "-d", "1"],
+  ["-s", "S5"],
+  ["--engine", "sqlite", "--sql", "select city, capacity_t from t3 where depot_id = 'D-0217'"],
+]
+expect = "| Port Avalon | 4120 |"
+
+[[scenario]]
+name = "depots-per-region"
+question = "How many depots does each region have?"
+steps = [
+  ["--tables"],
+  ["--engine", "sqlite", "--sql", "select region, count(*) as depots from t3 group by region order by region"],
+]
+expect = "| region | depots |"
+
+[[scenario]]
+name = "sensor-calibration"
+question = "What is the channel 9 calibration offset for sensor S-14?"
+steps = [["--tables"], ["--table", "T4", "--rows", "14", "--cols", "sensor,ch_09"]]
+expect = "| S-14 | 0.137 |"
