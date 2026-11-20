@@ -116,7 +116,7 @@ Feature: Diagrams
       | args                          | message                                                   |
       | --diagram D9                  | no diagram 'D9'; available: D1, D2                        |
       | --diagrams --format csv       | --format csv does not apply to diagrams                   |
-      | --diagram D1 -s S1            | --section cannot be combined with --table or --diagram    |
+      | --diagram D1 -s S1            | --section cannot be combined with --table, --diagram      |
       | --diagrams --structure        | --structure cannot be combined with --table, --tables     |
       | --diagram D1 --table T1       | not allowed with argument                                 |
       | --format json                 | --format only applies with                                |

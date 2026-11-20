@@ -38,6 +38,7 @@ src/mdpeek/
 ├── diagram_output.py  # --diagram / --diagrams output
 ├── diagrams.py      # mermaid / PlantUML / Graphviz / D2 fences
 ├── engines.py       # SQL over tables: sqlite, optional duckdb
+├── fences.py        # every fenced block: --fence / --fences
 ├── formats.py       # md / csv / tsv / json / jsonl output
 ├── model.py         # Section / Document tree and ID lookup
 ├── options.py       # StrEnum API options and coerce()

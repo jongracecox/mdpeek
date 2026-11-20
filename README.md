@@ -90,6 +90,30 @@ The summary gives the language, the diagram type where it's stated
 (`flowchart`, `sequenceDiagram`, `digraph`, ...), its title if it has one,
 and its line count. `--format json|jsonl` works for diagram output too.
 
+## Fenced blocks
+
+Every fenced block gets an ID (`F1`, `F2`, ...), so you can pull one code
+example without reading its whole section. Fences stay inline in document
+output; this is an inventory and a shortcut.
+
+```console
+$ mdpeek README.md --fences
+[F1] S1.3.1 bash (1 line)
+[F2] S1.3.2 python (11 lines)
+[F7] S1.6.2 mermaid (19 lines) = D1
+...
+$ mdpeek README.md --fences | grep python     # filter with the usual tools
+$ mdpeek README.md --fence F1 | sh               # one block: just the source
+```
+
+| Command | Shows |
+|---|---|
+| `--fence ID` | the block's bare source, ready to pipe on; several IDs are each labelled and fenced |
+| `--fences` | section, language and line count per block (scoped by `-s`); `--full` shows each |
+
+A fence with no language is listed as `plain`; a diagram fence also shows
+its diagram ID (`= D1`). `--format json|jsonl` works here too.
+
 ## URLs and caching
 
 ```console

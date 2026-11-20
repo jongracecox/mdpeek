@@ -13,6 +13,7 @@ Each scenario's calls are scripted, so these are best-case numbers: a real agent
 | depot-capacity | What is the capacity of depot D-0217? | 3 | 207 | 0.3% | found |
 | depots-per-region | How many depots does each region have? | 2 | 124 | 0.2% | found |
 | sensor-calibration | What is the channel 9 calibration offset for sensor S-14? | 2 | 122 | 0.2% | found |
-| dispatch-flow | What happens when a beacon doesn't confirm a dispatch? | 3 | 606 | 1.0% | found |
+| dispatch-flow | What happens when a beacon doesn't confirm a dispatch? | 3 | 588 | 1.0% | found |
+| install-command | What command installs the command line tools? | 3 | 144 | 0.2% | found |
 
-All 8 scenarios together: ~2,596 tokens, 0.5% of reading the whole file once per question (~476,904 tokens).
+All 9 scenarios together: ~2,722 tokens, 0.5% of reading the whole file once per question (~536,517 tokens).
