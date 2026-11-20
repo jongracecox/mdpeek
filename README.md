@@ -26,8 +26,12 @@ the file. See [evals/report.md](evals/report.md) for the scenarios.
 ## Install
 
 ```sh
-uv tool install mdpeek     # or: pipx install mdpeek
+uv tool install mdpeek             # or: pipx install mdpeek
+brew install jongracecox/tap/mdpeek
 ```
+
+The `duckdb` extra, for table queries, is only available with `uv` or `pipx`:
+`uv tool install 'mdpeek[duckdb]'`.
 
 ## Usage
 
