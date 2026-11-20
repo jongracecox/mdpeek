@@ -147,6 +147,11 @@ def build_parser() -> argparse.ArgumentParser:
         f"(default {defaults.header_max_chars})",
     )
     tables.add_argument(
+        "--raw-column-names",
+        action="store_true",
+        help="show original table headers instead of their SQL column names",
+    )
+    tables.add_argument(
         "--on-table-error",
         choices=[p.value for p in OnTableError],
         default=OnTableError.SHOW.value,
@@ -198,11 +203,12 @@ def _show_tables(doc: Document, args: argparse.Namespace, settings: TableSetting
         note = truncation_note(selection)
         if note:
             print(note, file=sys.stderr)
+    raw = settings.raw_column_names
     if fmt is Format.JSON and len(selections) > 1:
-        blocks = [render_table(s, fmt).rstrip("\n") for s in selections]
+        blocks = [render_table(s, fmt, raw_column_names=raw).rstrip("\n") for s in selections]
         return "[" + ",".join(blocks) + "]\n"
     separator = "" if fmt is Format.JSONL else "\n"
-    return separator.join(render_table(s, fmt) for s in selections)
+    return separator.join(render_table(s, fmt, raw_column_names=raw) for s in selections)
 
 
 def _run_sql(doc: Document, args: argparse.Namespace) -> str:
@@ -247,6 +253,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_rows=args.table_max_rows,
         header_max_chars=args.table_header_max_chars,
         on_error=args.on_table_error,
+        raw_column_names=args.raw_column_names,
     )
     doc = Document.from_text(text)
     try:

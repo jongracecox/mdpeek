@@ -13,6 +13,7 @@ ID and gets an ``error`` instead, so numbering never shifts.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -62,6 +63,8 @@ class TableSettings:
     max_rows: int = 10
     header_max_chars: int = 80
     on_error: OnTableError | str = OnTableError.SHOW
+    raw_column_names: bool = False
+    """Show original headers instead of the SQL column names."""
 
     def __post_init__(self) -> None:
         self.on_error = coerce(OnTableError, self.on_error)
@@ -101,6 +104,10 @@ class Table:
     def sql_name(self) -> str:
         """The table's name in SQL queries (``t1`` for ``T1``)."""
         return self.id.lower()
+
+    def display_headers(self, raw: bool = False) -> list[str]:
+        """Column names to show: SQL names, or the original headers if ``raw``."""
+        return list(self.headers if raw else self.sql_names)
 
     def typed_rows(self) -> list[list[Value]]:
         """Rows with values converted to their column's inferred type."""
@@ -194,13 +201,17 @@ def _raw_cell_count(line: str) -> int:
 def sql_names(headers: Sequence[str]) -> list[str]:
     """Lowercase snake_case column names, unique and safe for SQL.
 
-    >>> sql_names(["Owner Name", "owner-name", "2nd", "", "ID"])
-    ['owner_name', 'owner_name_2', 'c_2nd', 'col_4', 'id']
+    Accented letters become plain ASCII; every other run of characters
+    outside ``a-z0-9`` becomes one underscore.
+
+    >>> sql_names(["Owner Name", "owner-name", "2nd", "", "ID", "Café / Bar"])
+    ['owner_name', 'owner_name_2', 'c_2nd', 'col_4', 'id', 'cafe_bar']
     """
     names: list[str] = []
     seen: dict[str, int] = {}
     for index, header in enumerate(headers, start=1):
-        base = re.sub(r"[^0-9a-z]+", "_", header.lower()).strip("_") or f"col_{index}"
+        ascii_text = unicodedata.normalize("NFKD", header).encode("ascii", "ignore").decode()
+        base = re.sub(r"[^0-9a-z]+", "_", ascii_text.lower()).strip("_") or f"col_{index}"
         if base[0].isdigit():
             base = f"c_{base}"
         name = base
@@ -246,7 +257,7 @@ def summary(table: Table, settings: TableSettings, *, with_section: bool = False
     text = (
         f"[{table.id}]{where} table {_plural(table.n_cols, 'col')} × {_plural(table.n_rows, 'row')}"
     )
-    joined = ", ".join(table.headers)
+    joined = ", ".join(table.display_headers(settings.raw_column_names))
     if table.n_cols <= settings.max_cols and len(joined) <= settings.header_max_chars:
         text += f": {joined}"
     if table.warnings:

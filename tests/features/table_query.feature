@@ -22,13 +22,13 @@ Feature: Showing tables on demand
       | Acme | Springfield |
       """
 
-  Scenario: Opening a table shows its schema and a preview
+  Scenario: Opening a table shows its schema and a preview, using SQL names
     When I run "mdpeek doc.md --table T1"
     Then the output is:
       """
       [T1] S1 table 4 cols × 7 rows
-      columns: id INTEGER, item_name TEXT ("Item Name"), qty INTEGER, price REAL
-      | ID | Item Name | Qty | Price |
+      columns: id INTEGER, item_name TEXT, qty INTEGER, price REAL
+      | id | item_name | qty | price |
       |---|---|---|---|
       | 1 | bolt | 100 | 0.25 |
       | 2 | nut | 250 | 0.1 |
@@ -47,7 +47,7 @@ Feature: Showing tables on demand
       """
       [T1] S1 table 4 cols × 7 rows
       columns: id INTEGER
-      | ID |
+      | id |
       |---|
       | 1 |
       | 2 |
@@ -63,8 +63,8 @@ Feature: Showing tables on demand
     Then the output is:
       """
       [T1] S1 table 4 cols × 7 rows
-      columns: item_name TEXT ("Item Name"), price REAL
-      | Item Name | Price |
+      columns: item_name TEXT, price REAL
+      | item_name | price |
       |---|---|
       | pin | 0.2 |
       | clip | 0.12 |
@@ -74,8 +74,26 @@ Feature: Showing tables on demand
     When I run "mdpeek doc.md --tables"
     Then the output is:
       """
-      [T1] S1 table 4 cols × 7 rows: ID, Item Name, Qty, Price
+      [T1] S1 table 4 cols × 7 rows: id, item_name, qty, price
       [T2] S1.1 table 2 cols × 1 row: name, city
+      """
+
+  Scenario: Original headers on request
+    When I run "mdpeek doc.md --table T1 --rows 1 --raw-column-names"
+    Then the output is:
+      """
+      [T1] S1 table 4 cols × 7 rows
+      columns: id INTEGER, item_name TEXT ("Item Name"), qty INTEGER, price REAL
+      | ID | Item Name | Qty | Price |
+      |---|---|---|---|
+      | 1 | bolt | 100 | 0.25 |
+      """
+
+  Scenario: Listing with original headers
+    When I run "mdpeek doc.md --tables --raw-column-names -s S1"
+    Then the output contains:
+      """
+      [T1] S1 table 4 cols × 7 rows: ID, Item Name, Qty, Price
       """
 
   Scenario: Listing is scoped by section
@@ -96,8 +114,8 @@ Feature: Showing tables on demand
       | Acme | Springfield |
 
       [T1] S1 table 4 cols × 7 rows
-      columns: id INTEGER, item_name TEXT ("Item Name"), qty INTEGER, price REAL
-      | ID | Item Name | Qty | Price |
+      columns: id INTEGER, item_name TEXT, qty INTEGER, price REAL
+      | id | item_name | qty | price |
       |---|---|---|---|
       | 1 | bolt | 100 | 0.25 |
       """

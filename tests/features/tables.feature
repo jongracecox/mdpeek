@@ -50,6 +50,32 @@ Feature: Tables in document output
       [T3] table 2 cols × 11 rows: id, name
       """
 
+  Scenario: Inline tables show SQL column names unless raw names are asked for
+    Given a markdown file containing:
+      """
+      | Item Name | Unit Price ($) |
+      |:----------|---------------:|
+      | bolt | 0.25 |
+      """
+    When I run "mdpeek doc.md --full"
+    Then the output is:
+      """
+      [S0]
+      [T1]
+      | item_name | unit_price |
+      |:----------|---------------:|
+      | bolt | 0.25 |
+      """
+    When I run "mdpeek doc.md --full --raw-column-names"
+    Then the output is:
+      """
+      [S0]
+      [T1]
+      | Item Name | Unit Price ($) |
+      |:----------|---------------:|
+      | bolt | 0.25 |
+      """
+
   Scenario: Stubs and structure lines count tables
     When I run "mdpeek doc.md --structure"
     Then the output is:

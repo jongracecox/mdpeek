@@ -152,6 +152,8 @@ def _table_lines(ctx: _Context, table: Table) -> list[str]:
     if table.ok:
         if should_summarise(table, ctx.tables):
             return [summary(table, ctx.tables)]
+        if not ctx.tables.raw_column_names:
+            raw[0] = "| " + " | ".join(table.sql_names) + " |"
         return [f"[{table.id}]", *raw]  # inline, but still addressable by ID
     policy = ctx.tables.on_error
     if policy is OnTableError.EXCLUDE:
