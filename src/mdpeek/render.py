@@ -23,9 +23,11 @@ Intro.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from mdpeek.model import Document, Section
-from mdpeek.options import Mode, coerce
+from mdpeek.options import Mode, OnTableError, coerce
+from mdpeek.tables import Table, TableSettings, should_summarise, summary
 
 INDENT = "  "
 DEFAULT_VIEW_DEPTH = 1
@@ -36,11 +38,13 @@ def render(
     mode: Mode | str = Mode.VIEW,
     depth: int | None = None,
     sections: Iterable[str] | None = None,
+    tables: TableSettings | None = None,
 ) -> str:
     """Render ``doc`` and return the text, ending in a newline if not empty.
 
     ``sections`` limits output to those section IDs; depth then counts from
-    each one (the section itself is depth 1). Raises
+    each one (the section itself is depth 1). ``tables`` controls table
+    summaries in view and full modes (default :class:`TableSettings`). Raises
     :class:`~mdpeek.model.SectionNotFound` for an unknown ID and
     ``ValueError`` for a depth below 1.
     """
@@ -50,9 +54,10 @@ def render(
     if depth is None and mode is Mode.VIEW:
         depth = DEFAULT_VIEW_DEPTH
 
+    ctx = _Context(doc, mode, depth, tables or TableSettings())
     out: list[str] = []
     for root in _roots(doc, sections):
-        _render_section(doc, root, mode, 1, depth, out)
+        _render_section(ctx, root, 1, out)
     return "".join(f"{line}\n" for line in out)
 
 
@@ -67,50 +72,89 @@ def _roots(doc: Document, section_ids: Iterable[str] | None) -> list[Section]:
     return roots
 
 
-def _render_section(
-    doc: Document,
-    section: Section,
-    mode: Mode,
-    rel_depth: int,
-    max_depth: int | None,
-    out: list[str],
-) -> None:
-    indent = INDENT * (rel_depth - 1)
-    at_limit = max_depth is not None and rel_depth >= max_depth
+@dataclass
+class _Context:
+    doc: Document
+    mode: Mode
+    max_depth: int | None
+    tables: TableSettings
 
-    if mode is Mode.STRUCTURE:
-        count = str(section.body_line_count(doc.lines))
+    def tables_of(self, section: Section) -> list[Table]:
+        return [t for t in self.doc.tables if t.section_id == section.id]
+
+
+def _render_section(ctx: _Context, section: Section, rel_depth: int, out: list[str]) -> None:
+    indent = INDENT * (rel_depth - 1)
+    at_limit = ctx.max_depth is not None and rel_depth >= ctx.max_depth
+
+    if ctx.mode is Mode.STRUCTURE:
+        details = [str(section.body_line_count(ctx.doc.lines))]
         if at_limit and section.children:
-            count += f", {len(section.children)} sub"
-        out.append(f"{indent}{_label(section)} ({count})")
+            details.append(f"{len(section.children)} sub")
+        details.extend(_table_count(ctx, section))
+        out.append(f"{indent}{_label(section)} ({', '.join(details)})")
     else:
         out.append(f"{indent}{_label(section)}")
-        out.extend(_body(doc, section))
+        out.extend(_body(ctx, section))
 
     if not at_limit:
         for child in section.children:
-            _render_section(doc, child, mode, rel_depth + 1, max_depth, out)
-    elif mode is Mode.VIEW:
+            _render_section(ctx, child, rel_depth + 1, out)
+    elif ctx.mode is Mode.VIEW:
         child_indent = INDENT * rel_depth
-        out.extend(f"{child_indent}{_stub(doc, child)}" for child in section.children)
+        out.extend(f"{child_indent}{_stub(ctx, child)}" for child in section.children)
 
 
 def _label(section: Section) -> str:
     return f"[{section.id}] {section.title}".rstrip()
 
 
-def _stub(doc: Document, section: Section) -> str:
-    lines = section.body_line_count(doc.lines)
-    detail = f"{lines} line" if lines == 1 else f"{lines} lines"
+def _stub(ctx: _Context, section: Section) -> str:
+    lines = section.body_line_count(ctx.doc.lines)
+    details = [f"{lines} line" if lines == 1 else f"{lines} lines"]
     if section.children:
-        detail += f", {len(section.children)} sub"
-    return f"{_label(section)} ({detail})"
+        details.append(f"{len(section.children)} sub")
+    details.extend(_table_count(ctx, section))
+    return f"{_label(section)} ({', '.join(details)})"
 
 
-def _body(doc: Document, section: Section) -> list[str]:
-    body = [line.rstrip("\r\n") for line in doc.lines[section.body_start : section.body_end]]
+def _table_count(ctx: _Context, section: Section) -> list[str]:
+    count = len(ctx.tables_of(section))
+    if not count:
+        return []
+    return [f"{count} table" if count == 1 else f"{count} tables"]
+
+
+def _body(ctx: _Context, section: Section) -> list[str]:
+    lines = ctx.doc.lines
+    by_start = {t.start: t for t in ctx.tables_of(section)}
+    body: list[str] = []
+    i = section.body_start
+    while i < section.body_end:
+        table = by_start.get(i)
+        if table is None:
+            body.append(lines[i].rstrip("\r\n"))
+            i += 1
+            continue
+        body.extend(_table_lines(ctx, table))
+        i = table.end
+
     while body and not body[0].strip():
         body.pop(0)
     while body and not body[-1].strip():
         body.pop()
     return body
+
+
+def _table_lines(ctx: _Context, table: Table) -> list[str]:
+    """What view/full output shows in place of a table's source lines."""
+    raw = [line.rstrip("\r\n") for line in ctx.doc.lines[table.start : table.end]]
+    if table.ok:
+        if should_summarise(table, ctx.tables):
+            return [summary(table, ctx.tables)]
+        return [f"[{table.id}]", *raw]  # inline, but still addressable by ID
+    policy = ctx.tables.on_error
+    if policy is OnTableError.EXCLUDE:
+        return []
+    marker = summary(table, ctx.tables)
+    return [f"{marker}, raw text below", *raw] if policy is OnTableError.SHOW else [marker]

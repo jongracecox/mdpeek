@@ -9,8 +9,12 @@ from __future__ import annotations
 import os
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from mdpeek.options import Mode
+
+if TYPE_CHECKING:
+    from mdpeek.tables import Table, TableSettings
 
 PREAMBLE_ID = "S0"
 
@@ -80,6 +84,8 @@ class Document:
     """Source lines, each keeping its line ending."""
     sections: list[Section]
     """Top-level sections in order, starting with ``S0`` when there is a preamble."""
+    tables: list[Table] = field(default_factory=list)
+    """Top-level GFM tables in document order (``T1..Tn``)."""
 
     @classmethod
     def from_text(cls, text: str) -> Document:
@@ -90,15 +96,24 @@ class Document:
 
     @classmethod
     def from_path(cls, path: str | os.PathLike[str]) -> Document:
-        """Read and parse a UTF-8 markdown file, keeping its line endings."""
-        with open(path, encoding="utf-8", newline="") as handle:
+        """Read and parse a markdown file, keeping its line endings.
+
+        The file is decoded as UTF-8; invalid bytes become U+FFFD rather than
+        failing the whole read (tables report them as cleaned cells).
+        """
+        with open(path, encoding="utf-8", errors="replace", newline="") as handle:
             return cls.from_text(handle.read())
 
-    def view(self, depth: int | None = None, sections: Iterable[str] | None = None) -> str:
+    def view(
+        self,
+        depth: int | None = None,
+        sections: Iterable[str] | None = None,
+        tables: TableSettings | None = None,
+    ) -> str:
         """Content down to ``depth`` (default 1), with stubs for the next level."""
         from mdpeek.render import render
 
-        return render(self, Mode.VIEW, depth, sections)
+        return render(self, Mode.VIEW, depth, sections, tables)
 
     def structure(self, depth: int | None = None, sections: Iterable[str] | None = None) -> str:
         """Heading outline with line counts, down to ``depth`` (default: all)."""
@@ -106,11 +121,33 @@ class Document:
 
         return render(self, Mode.STRUCTURE, depth, sections)
 
-    def full(self, depth: int | None = None, sections: Iterable[str] | None = None) -> str:
+    def full(
+        self,
+        depth: int | None = None,
+        sections: Iterable[str] | None = None,
+        tables: TableSettings | None = None,
+    ) -> str:
         """All content down to ``depth`` (default: all)."""
         from mdpeek.render import render
 
-        return render(self, Mode.FULL, depth, sections)
+        return render(self, Mode.FULL, depth, sections, tables)
+
+    def table(self, table_id: str) -> Table:
+        """Return the table with ``table_id`` (case-insensitive)."""
+        from mdpeek.tables import TableNotFound
+
+        wanted = table_id.strip().upper()
+        for table in self.tables:
+            if table.id == wanted:
+                return table
+        raise TableNotFound(table_id, [t.id for t in self.tables])
+
+    def tables_in(self, section_ids: Iterable[str] | None = None) -> list[Table]:
+        """Tables in the given sections' subtrees, or all tables if ``None``."""
+        if section_ids is None:
+            return list(self.tables)
+        scope = {s.id for section_id in section_ids for s in self.get(section_id).walk()}
+        return [t for t in self.tables if t.section_id in scope]
 
     def walk(self) -> Iterator[Section]:
         """Yield every section in document order."""
