@@ -1,0 +1,16 @@
+{
+  "name": "mdpeek",
+  "owner": {
+    "name": "Jon Grace-Cox"
+  },
+  "metadata": {
+    "description": "Progressive exposure for markdown: navigate large documents by section instead of reading them whole."
+  },
+  "plugins": [
+    {
+      "name": "mdpeek",
+      "source": "./plugin",
+      "description": "Teaches Claude to read large markdown files, docs URLs and markdown directories with mdpeek: outline first, then only the sections, tables, diagrams or code blocks it needs."
+    }
+  ]
+}

@@ -77,6 +77,19 @@ PR**, or agents won't know the feature exists.
 
 See [CLAUDE.md](CLAUDE.md) for architecture and conventions.
 
+## Claude Code plugin
+
+`.claude-plugin/marketplace.json` makes the repository a plugin marketplace;
+the plugin itself lives in `plugin/` (`plugin/skills/mdpeek/SKILL.md`). Keep
+the skill short: when to reach for mdpeek and the basic loop. The full
+command guide belongs in mdpeek itself, not in the skill. `plugin.json` has
+no `version` on purpose, so installs track the git commit.
+
+```sh
+claude plugin validate .claude-plugin/marketplace.json
+claude plugin validate plugin
+```
+
 ## Testing
 
 ```sh
