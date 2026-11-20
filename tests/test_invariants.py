@@ -52,3 +52,13 @@ def test_children_nest_inside_parent(doc):
             assert child.end <= section.end
             assert child.depth == section.depth + 1
             assert child.parent is section
+
+
+def test_tables_round_trip_their_source_rows(doc):
+    for table in doc.tables:
+        if table.ok:
+            # header + delimiter + one source line per row
+            assert table.n_rows == table.end - table.start - 2
+            assert all(len(row) == table.n_cols for row in table.rows)
+        owner = doc.get(table.section_id)
+        assert owner.body_start <= table.start < table.end <= owner.body_end

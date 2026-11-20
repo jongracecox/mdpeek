@@ -19,8 +19,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 from mdpeek.model import PREAMBLE_ID, Document, Section
+from mdpeek.tables import build_tables
 
 _FRONT_MATTER_FENCES = {"---": ("---", "..."), "+++": ("+++",)}
 
@@ -36,7 +38,8 @@ class _Heading:
 def parse(text: str) -> Document:
     """Parse ``text`` into a document with a section tree."""
     lines = text.splitlines(keepends=True)
-    headings = _find_headings(lines)
+    tokens = _tokenize(lines)
+    headings = _find_headings(tokens)
     total = len(lines)
 
     sections: list[Section] = []
@@ -85,7 +88,17 @@ def parse(text: str) -> Document:
         stack.append(section)
 
     _close_subtrees(sections, total)
-    return Document(text=text, lines=lines, sections=sections)
+    doc = Document(text=text, lines=lines, sections=sections)
+    doc.tables = build_tables(tokens, lines, lambda line: _section_at(doc, line))
+    return doc
+
+
+def _section_at(doc: Document, line: int) -> str:
+    """ID of the section whose own body contains ``line``."""
+    for section in doc.walk():
+        if section.body_start <= line < section.body_end:
+            return section.id
+    return ""  # unreachable for parsed tables: every body line has an owner
 
 
 def _close_subtrees(siblings: list[Section], end: int) -> None:
@@ -95,15 +108,18 @@ def _close_subtrees(siblings: list[Section], end: int) -> None:
         _close_subtrees(section.children, section.end)
 
 
-def _find_headings(lines: list[str]) -> list[_Heading]:
-    """Return top-level ATX and setext headings in document order."""
+def _tokenize(lines: list[str]) -> list[Token]:
+    """Parse with markdown-it (CommonMark plus GFM tables)."""
     masked = list(lines)
     for i in range(_front_matter_end(lines)):
         # Blank out front matter so markdown-it can't read it as headings
         # (its closing '---' would otherwise make a setext heading).
         masked[i] = "\n"
-    tokens = MarkdownIt("commonmark").parse("".join(masked))
+    return MarkdownIt("commonmark").enable("table").parse("".join(masked))
 
+
+def _find_headings(tokens: list[Token]) -> list[_Heading]:
+    """Return top-level ATX and setext headings in document order."""
     headings: list[_Heading] = []
     for i, token in enumerate(tokens):
         if token.type != "heading_open" or token.level != 0 or token.map is None:
