@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import shlex
+import shutil
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -50,7 +51,24 @@ def _normalise(text: str) -> str:
 
 @given(parsers.parse('a markdown file "{name}" containing:'))
 def markdown_file(workdir: Path, name: str, docstring: str) -> None:
-    (workdir / name).write_text(docstring + "\n", encoding="utf-8")
+    path = workdir / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(docstring + "\n", encoding="utf-8")
+
+
+@given(parsers.parse('a file "{name}" containing:'))
+def any_file(workdir: Path, name: str, docstring: str) -> None:
+    markdown_file(workdir, name, docstring)
+
+
+@given(parsers.parse('an empty directory "{name}"'))
+def empty_directory(workdir: Path, name: str) -> None:
+    (workdir / name).mkdir(parents=True, exist_ok=True)
+
+
+@given(parsers.parse('the fixture directory "{fixture}" as "{name}"'))
+def fixture_directory(workdir: Path, fixture: str, name: str) -> None:
+    shutil.copytree(FIXTURES / fixture, workdir / name)
 
 
 @given("a markdown file containing:")

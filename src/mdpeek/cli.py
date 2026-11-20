@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 
@@ -13,6 +14,7 @@ from mdpeek.diagrams import DiagramNotFound
 from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
 from mdpeek.fences import FenceNotFound, render_fence_list, render_fences
 from mdpeek.formats import format_rows, to_json
+from mdpeek.library import Library
 from mdpeek.model import Document, SectionNotFound
 from mdpeek.options import Engine, Format, Mode, OnTableError
 from mdpeek.render import render
@@ -62,10 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
     defaults = TableSettings()
     parser = argparse.ArgumentParser(
         prog="mdpeek",
-        description="Progressively expose a markdown document by section.",
+        description="Progressively expose a markdown document by section, "
+        "or a directory of them as a tree.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("source", help="markdown file path, http(s) URL, or '-' for stdin")
+    parser.add_argument(
+        "source", help="markdown file path, directory, http(s) URL, or '-' for stdin"
+    )
     parser.add_argument(
         "-s",
         "--section",
@@ -95,6 +100,34 @@ def build_parser() -> argparse.ArgumentParser:
         type=_positive_int,
         metavar="N",
         help="levels to expand, counted from the top or from each --section",
+    )
+
+    directories = parser.add_argument_group("directories")
+    directories.add_argument(
+        "-L",
+        "--levels",
+        type=_positive_int,
+        metavar="N",
+        help="directory levels to expand (default 1)",
+    )
+    directories.add_argument(
+        "-n",
+        "--first",
+        type=_positive_int,
+        metavar="N",
+        help="show only the first N entries of each directory",
+    )
+    directories.add_argument(
+        "--include",
+        action="append",
+        metavar="GLOB",
+        help="files to list, by name or relative path (default *.md, *.markdown); repeatable",
+    )
+    directories.add_argument(
+        "--exclude",
+        action="append",
+        metavar="GLOB",
+        help="files or directories to skip, by name or relative path; repeatable",
     )
 
     tables = parser.add_argument_group("tables")
@@ -242,13 +275,17 @@ _URL_FLAGS = {"header": "--header", "ttl": "--ttl", "timeout": "--timeout"}
 _URL_SWITCHES = {"refresh": "--refresh", "no_cache": "--no-cache"}
 
 
+def _reject_url_flags(args: argparse.Namespace) -> None:
+    used = [flag for name, flag in _URL_FLAGS.items() if getattr(args, name) is not None]
+    used += [flag for name, flag in _URL_SWITCHES.items() if getattr(args, name)]
+    if used:
+        raise UsageError(f"{_flags(used)} only {_verb(used)} to URL sources")
+
+
 def _load(args: argparse.Namespace) -> tuple[str, SourceInfo]:
     """Read the source; URL options are only allowed with a URL."""
     if not is_url(args.source):
-        used = [flag for name, flag in _URL_FLAGS.items() if getattr(args, name) is not None]
-        used += [flag for name, flag in _URL_SWITCHES.items() if getattr(args, name)]
-        if used:
-            raise UsageError(f"{_flags(used)} only {_verb(used)} to URL sources")
+        _reject_url_flags(args)
     headers = dict(parse_header(h) for h in args.header or [])
     return load(
         args.source,
@@ -260,7 +297,34 @@ def _load(args: argparse.Namespace) -> tuple[str, SourceInfo]:
     )
 
 
+_DIRECTORY_FLAGS = ("levels", "first", "include", "exclude")
+_FILE_FLAGS = ("section", "depth", "table", "sql", "rows", "cols", "limit", "format", "engine")
+
+
+def _flag(name: str) -> str:
+    return "--" + name.replace("_", "-")
+
+
+def _show_directory(args: argparse.Namespace) -> str:
+    _reject_url_flags(args)
+    used = [_flag(f) for f in _FILE_FLAGS if getattr(args, f) is not None]
+    used += ["--tables"] if args.tables else []
+    used += [_flag(args.mode.value)] if args.mode is not Mode.VIEW else []
+    if used:
+        raise UsageError(
+            f"{_flags(used)} only {_verb(used)} to a file; "
+            f"run mdpeek on a file in {args.source!r} to use them"
+        )
+    library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
+    for skipped in library.skipped:
+        print(f"mdpeek: skipped {skipped}", file=sys.stderr)
+    return library.tree(levels=args.levels, first=args.first)
+
+
 def _check_combinations(args: argparse.Namespace) -> None:
+    used = [_flag(f) for f in _DIRECTORY_FLAGS if getattr(args, f) is not None]
+    if used:
+        raise UsageError(f"{_flags(used)} only {_verb(used)} to a directory")
     if args.engine is not None and args.sql is None:
         raise UsageError("--engine only applies with --sql")
     diagram_mode = bool(args.diagram or args.diagrams or args.fence or args.fences)
@@ -365,6 +429,14 @@ def _run_sql(doc: Document, args: argparse.Namespace) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
     args = build_parser().parse_args(argv)
+    if args.source != "-" and os.path.isdir(args.source):
+        try:
+            output = _show_directory(args)
+        except (UsageError, ValueError) as exc:
+            print(f"mdpeek: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        sys.stdout.write(output)
+        return 0
     try:
         text, info = _load(args)
     except (UsageError, ValueError) as exc:

@@ -9,6 +9,7 @@ Hello.
 
 from importlib.metadata import PackageNotFoundError, version
 
+from mdpeek.library import Library
 from mdpeek.model import Document, Section, SectionNotFound
 from mdpeek.options import CacheBackend, Engine, Format, Mode, OnTableError
 from mdpeek.parse import parse
@@ -24,6 +25,7 @@ __all__ = [
     "Document",
     "Engine",
     "Format",
+    "Library",
     "Mode",
     "OnTableError",
     "Section",
