@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from mdpeek import tables as tables_module
 from mdpeek.cli import main
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -58,6 +59,15 @@ def default_markdown_file(workdir: Path, docstring: str) -> None:
 @given(parsers.parse('the fixture "{fixture}" as "{name}"'))
 def fixture_file(workdir: Path, fixture: str, name: str) -> None:
     (workdir / name).write_bytes((FIXTURES / fixture).read_bytes())
+
+
+@given(parsers.parse('table "{table_id}" cannot be parsed'))
+def table_cannot_be_parsed(table_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(table) -> None:
+        if table.id == table_id:
+            raise ValueError("simulated parse failure")
+
+    monkeypatch.setattr(tables_module, "build_hook", fail)
 
 
 @when(parsers.parse('I run "{command}"'))

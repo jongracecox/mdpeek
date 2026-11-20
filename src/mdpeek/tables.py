@@ -82,6 +82,8 @@ class Table:
     types: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
+    raw_text: str = ""
+    """The table's source lines, with LF line endings."""
 
     @property
     def ok(self) -> bool:
@@ -121,7 +123,13 @@ def build_tables(
         if token.type != "table_open" or token.level != 0 or token.map is None:
             continue
         start, end = token.map
-        table = Table(id=f"T{len(tables) + 1}", section_id=section_of(start), start=start, end=end)
+        table = Table(
+            id=f"T{len(tables) + 1}",
+            section_id=section_of(start),
+            start=start,
+            end=end,
+            raw_text="".join(line.rstrip("\r\n") + "\n" for line in lines[start:end]),
+        )
         try:
             _fill(table, tokens, i, lines)
             if build_hook is not None:
