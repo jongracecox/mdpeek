@@ -42,5 +42,8 @@ uv tool install --force --reinstall .   # Install globally
 - **Output size is tracked.** `evals/baseline.json` caps what each eval
   scenario may cost. If a change grows output, update the baseline in the same
   PR and explain why; never loosen the tolerance to make CI pass.
+- **Keep the agent guide current.** `src/mdpeek/agent_instructions.md`
+  (printed by `--agent-instructions`) must cover every user-facing feature.
+  Update it in the same PR as the feature; see CONTRIBUTING.md.
 - Versions come from git tags (`hatch-vcs`); never add a `version` field.
 - Releases: see CONTRIBUTING.md.

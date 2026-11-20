@@ -33,6 +33,7 @@ wheel builds and won't pick up code changes.
 src/mdpeek/
 ├── __init__.py   # Public API and version
 ├── __main__.py   # python -m mdpeek
+├── agent_instructions.md  # the --agent-instructions guide
 ├── cache.py         # memory / disk caches for fetched URLs
 ├── cli.py           # argparse entry point
 ├── diagram_output.py  # --diagram / --diagrams output
@@ -57,6 +58,22 @@ tests/
 ├── test_render.py      # render API
 └── test_invariants.py  # structural invariants across all fixtures
 ```
+
+## Agent Instructions
+
+`mdpeek --agent-instructions` prints
+[`src/mdpeek/agent_instructions.md`](src/mdpeek/agent_instructions.md), a
+short guide that tells AI agents what mdpeek can do. **Any change that adds or
+changes a user-facing flag, ID kind or behaviour must update it in the same
+PR**, or agents won't know the feature exists.
+
+- Keep it compact: one example line per capability, a comment saying what it
+  shows, and only the notes an agent needs to avoid a mistake. Leave the
+  exhaustive detail to `--help` and the README. A test caps its size.
+- `tests/test_agent_instructions.py` runs every example: lines starting
+  `mdpeek doc.md` against `tests/fixtures/large/handbook.md`, and lines starting
+  `mdpeek docs/` against `tests/fixtures/library/`. Examples must use IDs and
+  paths that exist in those fixtures.
 
 See [CLAUDE.md](CLAUDE.md) for architecture and conventions.
 
