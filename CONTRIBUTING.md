@@ -186,6 +186,25 @@ The release workflow then runs:
 Approve in **Actions → release run → Review deployments**. Between the two
 approvals, sanity-check the upload at https://test.pypi.org/project/mdpeek/.
 
+### Updating the Homebrew formula
+
+The formula in [jongracecox/homebrew-tap](https://github.com/jongracecox/homebrew-tap)
+is not updated by the release workflow. Once the release is on PyPI, run the
+tap's `bump-pypi-formula` workflow by hand:
+
+```sh
+gh workflow run bump-pypi-formula -R jongracecox/homebrew-tap
+```
+
+It points `Formula/mdpeek.rb` at the latest PyPI sdist, refreshes its
+dependency resources, then builds, tests and audits it on macOS before
+committing to the tap. Pass `-f version=X.Y.Z` to pin a version. Check the run
+at https://github.com/jongracecox/homebrew-tap/actions.
+
+The formula's `test do` block runs the installed CLI. If a release changes
+the behaviour it checks, update that block in the tap before running the
+workflow, or the bump will fail.
+
 ### Recovering from a bad release
 
 PyPI and TestPyPI versions are immutable: you cannot re-upload `v0.1.1` once
