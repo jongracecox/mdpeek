@@ -33,8 +33,14 @@ wheel builds and won't pick up code changes.
 src/mdpeek/
 ├── __init__.py   # Public API and version
 ├── __main__.py   # python -m mdpeek
-└── cli.py        # argparse entry point
-tests/            # pytest unit tests (BDD features arrive with the CLI)
+├── cli.py        # argparse entry point
+├── model.py      # Section / Document tree and ID lookup
+├── options.py    # StrEnum API options and coerce()
+└── parse.py      # markdown -> section tree (markdown-it)
+tests/
+├── fixtures/small/     # one edge case per file (bytes kept exact, see .gitattributes)
+├── test_parse.py       # expected trees per fixture
+└── test_invariants.py  # structural invariants across all fixtures
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture and conventions.
@@ -148,7 +154,8 @@ Never delete and re-push a tag.
   disabled in the repository settings).
 - **Branch ruleset on `main`**: require a pull request and the `pre-commit`
   and `tests` status checks; block force pushes and deletion.
-- **Actions workflow permissions**: read and write, so the tests workflow can
-  push the coverage badge to the `badges` branch.
+- **Actions workflow permissions** can stay read-only: the job that pushes
+  the coverage badge to the `badges` branch requests `contents: write`
+  itself.
 
 See PyPA's Trusted Publishing docs: https://docs.pypi.org/trusted-publishers/
