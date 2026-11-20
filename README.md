@@ -4,8 +4,7 @@ Progressive exposure for markdown: navigate large markdown files by section,
 without loading the whole document into context. Built for AI agents, handy
 for humans.
 
-> Early development. Table summaries, table queries and URL sources are on
-> the way.
+> Early development. URL sources are on the way.
 
 ## Install
 
@@ -46,6 +45,56 @@ Reference intro...
 
 `FILE` can be `-` to read from stdin.
 
+## Tables
+
+Large tables cost a lot of context, so document output replaces them with a
+one-line summary and an ID. Small tables stay inline under their ID.
+
+```console
+$ mdpeek report.md -s S2
+[S2] Results
+[T3] table 12 cols × 480 rows
+[T4] table 3 cols × 20 rows: region, revenue, growth
+
+$ mdpeek report.md --table T4 --rows 1-3
+[T4] S2 table 3 cols × 20 rows
+columns: region TEXT, revenue REAL, growth REAL
+| region | revenue | growth |
+|---|---|---|
+| north | 1200.5 | 0.04 |
+| south | 980 | 0.11 |
+| east | 1430.25 | -0.02 |
+
+$ mdpeek report.md --sql "select region from t4 where growth > 0.1"
+| region |
+|---|
+| south |
+```
+
+| Command | Shows |
+|---|---|
+| `--table ID` | schema (SQL names and types) and the first 5 rows; repeatable |
+| `--table ID --full` | every row |
+| `--table ID --rows 10-30 --cols a,b` | a slice; columns by SQL name or original header |
+| `--tables` | one summary line per table (scoped by `-s`); add `--full`/`--rows`/`--cols` to show each |
+| `--sql QUERY` | SQL over every table (scoped by `-s`), loaded as `t1`, `t2`, … |
+| `--format md\|csv\|tsv\|json\|jsonl` | output format for table data (default `md`) |
+| `--limit N` | maximum rows shown (default 50) |
+
+- **Summaries** replace tables wider than 6 columns or longer than 10 rows.
+  Column names are listed only when they fit in 80 characters. Tune with
+  `--table-max-cols`, `--table-max-rows`, `--table-header-max-chars`, or turn
+  summaries off with `--no-table-summaries`.
+- **Types** are inferred per column: INTEGER, REAL or TEXT; empty cells are
+  NULL. Column names become lowercase snake_case for SQL (`Item Name` →
+  `item_name`).
+- **SQL engines:** sqlite (built in) or DuckDB (`pip install 'mdpeek[duckdb]'`).
+  The default `--engine auto` uses DuckDB when it is installed; set
+  `MDPEEK_ENGINE=sqlite|duckdb` to choose a default.
+- **Malformed tables:** ragged rows and bad characters are fixed and noted in
+  the summary. A table that cannot be parsed keeps its ID (`[T3!]`), and
+  `--on-table-error show|summary|exclude` controls how it appears.
+
 ## Python API
 
 ```python
@@ -55,6 +104,11 @@ doc = Document.from_path("guide.md")
 print(doc.structure())
 print(doc.view(depth=2, sections=["S1.2"]))
 section = doc.get("S1.2")  # Section(id, title, level, depth, start, end, ...)
+
+table = doc.table("T4")     # Table(headers, rows, sql_names, types, ...)
+table.to_records()          # [{"region": "north", "revenue": 1200.5, ...}, ...]
+result = doc.query("select region from t4 where growth > 0.1")  # Engine.AUTO
+result.columns, result.rows, result.engine
 ```
 
 ## License

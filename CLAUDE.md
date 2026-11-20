@@ -11,6 +11,7 @@ uv sync                                 # Install dependencies
 uv run mdpeek --version                 # Run locally
 uv run pytest                           # Unit, doctest and BDD tests with coverage
 uv run nox                              # Tests across Python 3.11–3.14
+uv run nox -s tests_duckdb              # Tests with the duckdb extra
 prek run --all-files                    # ruff, ty and hygiene hooks
 uv tool install --force --reinstall .   # Install globally
 ```
