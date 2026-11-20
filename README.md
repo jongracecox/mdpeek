@@ -165,13 +165,34 @@ docs/ Handbook (9 files, 3 dirs, 37 lines)
     advanced/ (1 file, 2 lines)
     … 2 more (2 files, 12 lines)
   … 3 more (1 dir, 2 files, 19 lines)
+
+$ mdpeek docs/guides -d 1
+docs/guides/ Guides (4 files, 1 dir, 16 lines)
+  README.md Guides (2 lines)
+  advanced/ (1 file, 2 lines)
+  deploy.md Deploy (7 lines, 1 table)
+  install.md Install (5 lines, 2 sections)
+    [S1.1] Linux (1)
+    [S1.2] macOS (1)
+
+$ mdpeek docs/ -s guides/install.md#S1.2 -s notes.md#S2
+==> guides/install.md <==
+[S1.2] macOS
+Run it too.
+
+==> notes.md <==
+[S2] Part two
+Second.
 ```
 
 | Command | Shows |
 |---|---|
 | `mdpeek DIR` | the directory's entries; subdirectories collapsed to totals |
 | `mdpeek DIR -L N` | N directory levels expanded |
-| `mdpeek DIR -n N` | the first N entries of each directory, then a `… K more` line |
+| `mdpeek DIR -d N` | each listed file's headings, N levels below its title |
+| `mdpeek DIR -n N` | the first N entries of each directory and sections under each heading, then a `… K more` line |
+| `mdpeek DIR -s PATH[#ID] ...` | whole files or sections from several files, each under `==> PATH <==`; `--structure`, `--full` and `-d` work as for a file |
+| `mdpeek DIR --table PATH#ID ...` | tables from files in the directory; `--format` other than `md` takes one file at a time |
 | `--include GLOB` | list these files instead of `*.md` and `*.markdown`; repeatable |
 | `--exclude GLOB` | skip matching files and directories; repeatable |
 
@@ -181,6 +202,12 @@ docs/ Handbook (9 files, 3 dirs, 37 lines)
 - **Totals:** directories count every file, subdirectory and line below
   them, so the bulk of a large library is visible before you open it.
   A file's `sections` don't count its title.
+- **Headings** with `-d` start below a file's title, so `-d 1` shows a
+  single-title file's `##` sections. A file with several top-level headings
+  lists those instead. Section IDs are the file's own, so `PATH#S1.2` from
+  the tree is `mdpeek PATH -s S1.2`.
+- **Paths** in `-s` and `--table` are relative to the directory and must stay
+  inside it.
 - **Order:** the README, then subdirectories, then files, alphabetically.
 - **Skipped:** hidden entries, `node_modules`, `__pycache__`, symlinked
   directories, and directories with no matching files.
@@ -272,7 +299,7 @@ result.columns, result.rows, result.engine
 from mdpeek import Library
 
 library = Library.from_path("docs/", exclude=["drafts"])
-print(library.tree(levels=2, first=10))
+print(library.tree(levels=2, first=10, depth=1))
 ```
 
 ## License
