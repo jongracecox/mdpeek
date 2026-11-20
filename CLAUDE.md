@@ -9,7 +9,7 @@ document into context.
 ```sh
 uv sync                                 # Install dependencies
 uv run mdpeek --version                 # Run locally
-uv run pytest                           # Tests with coverage (unit, doctests; BDD later)
+uv run pytest                           # Unit, doctest and BDD tests with coverage
 uv run nox                              # Tests across Python 3.11–3.14
 prek run --all-files                    # ruff, ty and hygiene hooks
 uv tool install --force --reinstall .   # Install globally

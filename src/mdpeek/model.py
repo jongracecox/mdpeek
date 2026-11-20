@@ -6,8 +6,11 @@ half-open (``start`` inclusive, ``end`` exclusive).
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import os
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+
+from mdpeek.options import Mode
 
 PREAMBLE_ID = "S0"
 
@@ -77,6 +80,37 @@ class Document:
     """Source lines, each keeping its line ending."""
     sections: list[Section]
     """Top-level sections in order, starting with ``S0`` when there is a preamble."""
+
+    @classmethod
+    def from_text(cls, text: str) -> Document:
+        """Parse markdown ``text``."""
+        from mdpeek.parse import parse
+
+        return parse(text)
+
+    @classmethod
+    def from_path(cls, path: str | os.PathLike[str]) -> Document:
+        """Read and parse a UTF-8 markdown file, keeping its line endings."""
+        with open(path, encoding="utf-8", newline="") as handle:
+            return cls.from_text(handle.read())
+
+    def view(self, depth: int | None = None, sections: Iterable[str] | None = None) -> str:
+        """Content down to ``depth`` (default 1), with stubs for the next level."""
+        from mdpeek.render import render
+
+        return render(self, Mode.VIEW, depth, sections)
+
+    def structure(self, depth: int | None = None, sections: Iterable[str] | None = None) -> str:
+        """Heading outline with line counts, down to ``depth`` (default: all)."""
+        from mdpeek.render import render
+
+        return render(self, Mode.STRUCTURE, depth, sections)
+
+    def full(self, depth: int | None = None, sections: Iterable[str] | None = None) -> str:
+        """All content down to ``depth`` (default: all)."""
+        from mdpeek.render import render
+
+        return render(self, Mode.FULL, depth, sections)
 
     def walk(self) -> Iterator[Section]:
         """Yield every section in document order."""
