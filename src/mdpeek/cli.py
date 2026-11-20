@@ -7,11 +7,13 @@ import sys
 from collections.abc import Sequence
 
 from mdpeek import __version__
+from mdpeek.cache import DEFAULT_TTL, CacheBackend
 from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
 from mdpeek.formats import format_rows, to_json
 from mdpeek.model import Document, SectionNotFound
 from mdpeek.options import Engine, Format, Mode, OnTableError
 from mdpeek.render import render
+from mdpeek.source import DEFAULT_TIMEOUT, FetchError, SourceInfo, is_url, load, parse_header
 from mdpeek.table_output import (
     DEFAULT_LIMIT,
     render_table,
@@ -24,6 +26,15 @@ from mdpeek.tables import SelectionError, TableNotFound, TableSettings
 EXIT_USAGE = 2
 
 _DATA_FLAGS = ("rows", "cols", "limit", "format")
+_MACHINE_FORMATS = {f.value for f in Format} - {Format.MD.value}
+
+
+def _flags(used: list[str]) -> str:
+    return ", ".join(used)
+
+
+def _verb(used: list[str]) -> str:
+    return "applies" if len(used) == 1 else "apply"
 
 
 class UsageError(Exception):
@@ -51,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Progressively expose a markdown document by section.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("source", help="markdown file path, or '-' for stdin")
+    parser.add_argument("source", help="markdown file path, http(s) URL, or '-' for stdin")
     parser.add_argument(
         "-s",
         "--section",
@@ -157,14 +168,64 @@ def build_parser() -> argparse.ArgumentParser:
         default=OnTableError.SHOW.value,
         help="how to show a table that could not be parsed (default show)",
     )
+
+    urls = parser.add_argument_group("URL sources")
+    urls.add_argument(
+        "-H",
+        "--header",
+        action="append",
+        metavar="'NAME: VALUE'",
+        help="request header for a URL source; repeatable (never written to the cache)",
+    )
+    urls.add_argument(
+        "--ttl",
+        type=_non_negative_float,
+        metavar="SECONDS",
+        help=f"reuse a cached copy younger than this (default {DEFAULT_TTL})",
+    )
+    urls.add_argument(
+        "--refresh", action="store_true", help="fetch again, ignoring any cached copy"
+    )
+    urls.add_argument("--no-cache", action="store_true", help="neither read nor write the cache")
+    urls.add_argument(
+        "--timeout",
+        type=_non_negative_float,
+        metavar="SECONDS",
+        help=f"network timeout (default {DEFAULT_TIMEOUT:g})",
+    )
     return parser
 
 
-def _read_source(source: str) -> str:
-    if source == "-":
-        return sys.stdin.read()
-    with open(source, encoding="utf-8", errors="replace", newline="") as handle:
-        return handle.read()
+def _non_negative_float(value: str) -> float:
+    try:
+        number = float(value)
+    except ValueError:
+        number = -1.0
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"must be a number of seconds, got {value!r}")
+    return number
+
+
+_URL_FLAGS = {"header": "--header", "ttl": "--ttl", "timeout": "--timeout"}
+_URL_SWITCHES = {"refresh": "--refresh", "no_cache": "--no-cache"}
+
+
+def _load(args: argparse.Namespace) -> tuple[str, SourceInfo]:
+    """Read the source; URL options are only allowed with a URL."""
+    if not is_url(args.source):
+        used = [flag for name, flag in _URL_FLAGS.items() if getattr(args, name) is not None]
+        used += [flag for name, flag in _URL_SWITCHES.items() if getattr(args, name)]
+        if used:
+            raise UsageError(f"{_flags(used)} only {_verb(used)} to URL sources")
+    headers = dict(parse_header(h) for h in args.header or [])
+    return load(
+        args.source,
+        headers=headers,
+        cache=None if args.no_cache else CacheBackend.DISK,
+        ttl=DEFAULT_TTL if args.ttl is None else args.ttl,
+        refresh=args.refresh,
+        timeout=DEFAULT_TIMEOUT if args.timeout is None else args.timeout,
+    )
 
 
 def _check_combinations(args: argparse.Namespace) -> None:
@@ -178,7 +239,7 @@ def _check_combinations(args: argparse.Namespace) -> None:
     if not table_mode:
         used = [f"--{flag}" for flag in _DATA_FLAGS if getattr(args, flag) is not None]
         if used:
-            raise UsageError(f"{', '.join(used)} only apply with --table, --tables or --sql")
+            raise UsageError(f"{_flags(used)} only {_verb(used)} with --table, --tables or --sql")
         return
     if args.mode is Mode.STRUCTURE:
         raise UsageError("--structure cannot be combined with --table, --tables or --sql")
@@ -244,9 +305,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
     args = build_parser().parse_args(argv)
     try:
-        text = _read_source(args.source)
+        text, info = _load(args)
+    except (UsageError, ValueError) as exc:
+        print(f"mdpeek: {exc}", file=sys.stderr)
+        return EXIT_USAGE
     except OSError as exc:
         print(f"mdpeek: cannot read {args.source!r}: {exc.strerror or exc}", file=sys.stderr)
+        return EXIT_USAGE
+    except FetchError as exc:
+        print(f"mdpeek: cannot fetch {args.source!r}: {exc}", file=sys.stderr)
         return EXIT_USAGE
 
     settings = TableSettings(
@@ -258,6 +325,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         raw_column_names=args.raw_column_names,
     )
     doc = Document.from_text(text)
+    doc.source = info
     try:
         _check_combinations(args)
         if args.sql is not None:
@@ -277,5 +345,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     ) as exc:
         print(f"mdpeek: {exc}", file=sys.stderr)
         return EXIT_USAGE
+
+    cached = info.cached_line()
+    if cached and args.format in _MACHINE_FORMATS:
+        print(f"mdpeek: {cached}", file=sys.stderr)  # keep data output parseable
+    elif cached:
+        output = f"{cached}\n{output}"
     sys.stdout.write(output)
     return 0

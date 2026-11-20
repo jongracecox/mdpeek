@@ -4,7 +4,7 @@ Progressive exposure for markdown: navigate large markdown files by section,
 without loading the whole document into context. Built for AI agents, handy
 for humans.
 
-> Early development. URL sources are on the way.
+> Early development.
 
 ## Install
 
@@ -43,7 +43,36 @@ Reference intro...
 | `mdpeek FILE --full [-d N]` | all content (down to depth N) |
 | `mdpeek FILE -s ID [-s ID ...]` | only those sections; depth counts from each |
 
-`FILE` can be `-` to read from stdin.
+`FILE` can be `-` to read from stdin, or an `http(s)://` URL.
+
+## URLs and caching
+
+```console
+$ mdpeek https://example.com/docs/guide.md --structure
+[S1] Guide (4)
+  ...
+$ mdpeek https://example.com/docs/guide.md -s S1.2
+(cached 2026-11-20 15:04Z)
+[S1.2] Configuration
+...
+```
+
+A URL is fetched once and cached on disk, so repeated calls on the same
+document don't download it again. Output that came from the cache starts
+with a `(cached …)` line giving the fetch time (for csv/tsv/json output it
+goes to stderr, so the data stays parseable).
+
+| Option | Effect |
+|---|---|
+| `-H 'Name: value'` | send a request header (repeatable); cached separately per header set, and header values are never written to the cache |
+| `--ttl SECONDS` | reuse a cached copy younger than this (default 3600) |
+| `--refresh` | fetch again and update the cache |
+| `--no-cache` | neither read nor write the cache |
+| `--timeout SECONDS` | network timeout (default 30) |
+
+The cache lives in `$MDPEEK_CACHE_DIR`, else `$XDG_CACHE_HOME/mdpeek`, else
+`~/.cache/mdpeek`, readable only by you. Requests identify as
+`mdpeek/<version>`.
 
 ## Tables
 
@@ -116,6 +145,7 @@ $ mdpeek report.md --sql "select region from t4 where growth > 0.1"
 from mdpeek import Document
 
 doc = Document.from_path("guide.md")
+# or: Document.from_url(url, headers={...}, cache="memory" | "disk" | None, ttl=3600)
 print(doc.structure())
 print(doc.view(depth=2, sections=["S1.2"]))
 section = doc.get("S1.2")  # Section(id, title, level, depth, start, end, ...)

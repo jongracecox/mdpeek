@@ -7,14 +7,17 @@ half-open (``start`` inclusive, ``end`` exclusive).
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from mdpeek.options import Engine, Mode
 
 if TYPE_CHECKING:
+    from mdpeek.cache import Cache
     from mdpeek.engines import QueryResult
+    from mdpeek.options import CacheBackend
+    from mdpeek.source import SourceInfo
     from mdpeek.tables import Table, TableSettings
 
 PREAMBLE_ID = "S0"
@@ -87,6 +90,8 @@ class Document:
     """Top-level sections in order, starting with ``S0`` when there is a preamble."""
     tables: list[Table] = field(default_factory=list)
     """Top-level GFM tables in document order (``T1..Tn``)."""
+    source: SourceInfo | None = None
+    """Where the text came from (path, URL, stdin), and whether it was cached."""
 
     @classmethod
     def from_text(cls, text: str) -> Document:
@@ -102,8 +107,44 @@ class Document:
         The file is decoded as UTF-8; invalid bytes become U+FFFD rather than
         failing the whole read (tables report them as cleaned cells).
         """
-        with open(path, encoding="utf-8", errors="replace", newline="") as handle:
-            return cls.from_text(handle.read())
+        from mdpeek.source import SourceInfo, read_path
+
+        doc = cls.from_text(read_path(os.fspath(path)))
+        doc.source = SourceInfo(os.fspath(path), "path")
+        return doc
+
+    @classmethod
+    def from_url(
+        cls,
+        url: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+        cache: CacheBackend | str | Cache | None = "memory",
+        ttl: float | None = None,
+        refresh: bool = False,
+        timeout: float | None = None,
+    ) -> Document:
+        """Fetch and parse markdown from an ``http(s)://`` URL.
+
+        Results are cached in memory for the process by default; pass
+        ``cache="disk"`` to share them between runs, or ``None`` to turn
+        caching off. ``doc.source`` says whether the text came from the cache.
+        """
+        from mdpeek.source import DEFAULT_TIMEOUT, DEFAULT_TTL, is_url, load
+
+        if not is_url(url):
+            raise ValueError(f"not an http(s) URL: {url!r}")
+        text, info = load(
+            url,
+            headers=headers,
+            cache=cache,
+            ttl=DEFAULT_TTL if ttl is None else ttl,
+            refresh=refresh,
+            timeout=DEFAULT_TIMEOUT if timeout is None else timeout,
+        )
+        doc = cls.from_text(text)
+        doc.source = info
+        return doc
 
     def view(
         self,
