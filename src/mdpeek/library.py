@@ -203,7 +203,7 @@ class Library:
         return "".join(f"{line}\n" for line in out)
 
 
-_ID_SUFFIX = re.compile(r"[SsTt]\d+(?:\.\d+)*")
+_ID_SUFFIX = re.compile(r"[SsTtDdFf]\d+(?:\.\d+)*")
 
 
 @dataclass(frozen=True)
@@ -214,7 +214,8 @@ class Ref:
     """The file's path relative to the library root, with ``/`` separators."""
     path: Path
     item: str | None = None
-    """A section or table ID, upper-cased, or ``None`` for the whole file."""
+    """A section, table, diagram or fenced-block ID, upper-cased, or ``None``
+    for the whole file."""
 
 
 def resolve_ref(root: str | os.PathLike[str], ref: str) -> Ref:
@@ -397,6 +398,8 @@ def _file_line(node: FileNode) -> str:
         details.append(_plural(sections, "section"))
     if node.doc.tables:
         details.append(_plural(len(node.doc.tables), "table"))
+    if node.doc.diagrams:
+        details.append(_plural(len(node.doc.diagrams), "diagram"))
     return _labelled(node.name, node.title, details)
 
 
@@ -455,9 +458,10 @@ def _render_headings(
         details = [str(section.body_line_count(lines))]
         if at_limit and section.children:
             details.append(f"{len(section.children)} sub")
-        tables = sum(1 for t in node.doc.tables if t.section_id == section.id)
-        if tables:
-            details.append(_plural(tables, "table"))
+        for items, word in ((node.doc.tables, "table"), (node.doc.diagrams, "diagram")):
+            count = sum(1 for item in items if item.section_id == section.id)
+            if count:
+                details.append(_plural(count, word))
         out.append(f"{indent}[{section.id}] {section.title}".rstrip() + f" ({', '.join(details)})")
         if not at_limit:
             _render_headings(node, section.children, indent_level + 1, rel_depth + 1, opts, out)

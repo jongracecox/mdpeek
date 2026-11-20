@@ -150,7 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--diagram",
         action="append",
         metavar="ID",
-        help="print a diagram's source (e.g. D1); repeatable",
+        help="print a diagram's source (e.g. D1, or PATH#D1 on a directory); repeatable",
     )
     targets.add_argument(
         "--diagrams",
@@ -161,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--fence",
         action="append",
         metavar="ID",
-        help="print a fenced block's source (e.g. F3); repeatable",
+        help="print a fenced block's source (e.g. F3, or PATH#F3 on a directory); repeatable",
     )
     targets.add_argument(
         "--fences",
@@ -312,11 +312,16 @@ def _used(args: argparse.Namespace, names: Sequence[str]) -> list[str]:
     return [_flag(n) for n in names if getattr(args, n) is not None]
 
 
+_FETCH_KINDS = {"table": "tables", "diagram": "diagrams", "fence": "fenced blocks"}
+"""Options that fetch an item by ``PATH#ID`` on a directory, and what they fetch."""
+_LISTS = ("tables", "diagrams", "fences")
+
+
 def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
     _reject_url_flags(args)
-    if args.section or args.table:
+    if args.section or any(getattr(args, kind) for kind in _FETCH_KINDS):
         return _fetch_from_directory(args, settings)
-    used = _used(args, _FILE_FLAGS) + (["--tables"] if args.tables else [])
+    used = _used(args, _FILE_FLAGS) + [_flag(n) for n in _LISTS if getattr(args, n)]
     used += [_flag(args.mode.value)] if args.mode is not Mode.VIEW else []
     if used:
         raise UsageError(
@@ -330,39 +335,62 @@ def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
 
 
 def _fetch_from_directory(args: argparse.Namespace, settings: TableSettings) -> str:
-    """Sections (``-s PATH[#ID]``) or tables (``--table PATH#ID``) from files in a directory."""
+    """Sections (``-s PATH[#ID]``), or tables, diagrams or fenced blocks
+    (``--table`` / ``--diagram`` / ``--fence PATH#ID``), from files in a directory.
+    """
     used = _used(args, _TREE_FLAGS) + _used(args, ("sql",))
-    used += ["--tables"] if args.tables else []
+    used += [_flag(n) for n in _LISTS if getattr(args, n)]
     if used:
-        raise UsageError(f"{_flags(used)} cannot be combined with -s or --table on a directory")
+        raise UsageError(
+            f"{_flags(used)} cannot be combined with -s, --table, --diagram or --fence "
+            "on a directory"
+        )
     _check_combinations(args)
 
+    kind = next((k for k in _FETCH_KINDS if getattr(args, k)), None)
+    raw_refs: list[str] = getattr(args, kind) if kind else args.section
     groups: dict[str, tuple[Path, list[str | None]]] = {}
-    for raw in args.table or args.section:
+    for raw in raw_refs:
         ref = resolve_ref(args.source, raw)
-        if args.table and ref.item is None:
-            raise UsageError(f"--table needs PATH#ID on a directory, got {raw!r}")
+        if kind and ref.item is None:
+            raise UsageError(f"--{kind} needs PATH#ID on a directory, got {raw!r}")
         groups.setdefault(ref.rel, (ref.path, []))[1].append(ref.item)
 
+    # Data formats, and a single diagram or fenced block, print the item alone so
+    # it can be piped; that only makes sense for one file.
     fmt = Format(args.format or Format.MD)
-    plain_data = bool(args.table) and fmt is not Format.MD
-    if plain_data and len(groups) > 1:
-        raise UsageError(f"--format {fmt.value} takes tables from one file at a time")
+    plain = kind is not None and (fmt is not Format.MD or (kind != "table" and len(raw_refs) == 1))
+    if plain and len(groups) > 1:
+        raise UsageError(f"--format {fmt.value} takes {_FETCH_KINDS[kind]} from one file at a time")
 
     blocks: list[str] = []
     for rel, (path, items) in groups.items():
         doc = Document.from_path(path)
         try:
-            if args.table:
-                scoped = argparse.Namespace(**{**vars(args), "table": items})
-                body = _show_tables(doc, scoped, settings)
-            else:
-                sections = None if None in items else [i for i in items if i]
-                body = render(doc, args.mode, args.depth, sections, settings)
-        except (SectionNotFound, TableNotFound) as exc:
+            body = _fetch_from_file(doc, args, kind, items, settings, label_single=not plain)
+        except (SectionNotFound, TableNotFound, DiagramNotFound, FenceNotFound) as exc:
             raise UsageError(f"{rel}: {exc}") from exc
-        blocks.append(body if plain_data else f"==> {rel} <==\n{body}")
+        blocks.append(body if plain else f"==> {rel} <==\n{body}")
     return "\n".join(blocks)
+
+
+def _fetch_from_file(
+    doc: Document,
+    args: argparse.Namespace,
+    kind: str | None,
+    items: list[str | None],
+    settings: TableSettings,
+    label_single: bool,
+) -> str:
+    if kind is None:
+        sections = None if None in items else [i for i in items if i]
+        return render(doc, args.mode, args.depth, sections, settings, args.diagram_summaries)
+    scoped = argparse.Namespace(**{**vars(args), kind: items})
+    if kind == "table":
+        return _show_tables(doc, scoped, settings)
+    if kind == "diagram":
+        return _show_diagrams(doc, scoped, label_single)
+    return _show_fences(doc, scoped, label_single)
 
 
 def _reject_tree_flags(args: argparse.Namespace) -> None:
@@ -401,20 +429,22 @@ def _check_combinations(args: argparse.Namespace) -> None:
         raise UsageError(f"--format {args.format} does not apply to {what}; use md, json or jsonl")
 
 
-def _show_fences(doc: Document, args: argparse.Namespace) -> str:
+def _show_fences(doc: Document, args: argparse.Namespace, label_single: bool = False) -> str:
     fmt = Format(args.format or Format.MD)
     if args.fence:
-        return render_fences([doc.fence(f) for f in args.fence], fmt)
+        return render_fences([doc.fence(f) for f in args.fence], fmt, label_single=label_single)
     found = doc.fences_in(args.section)
     if args.mode is Mode.FULL:
         return render_fences(found, fmt)
     return render_fence_list(found, fmt)
 
 
-def _show_diagrams(doc: Document, args: argparse.Namespace) -> str:
+def _show_diagrams(doc: Document, args: argparse.Namespace, label_single: bool = False) -> str:
     fmt = Format(args.format or Format.MD)
     if args.diagram:
-        return render_diagrams([doc.diagram(d) for d in args.diagram], fmt)
+        return render_diagrams(
+            [doc.diagram(d) for d in args.diagram], fmt, label_single=label_single
+        )
     found = doc.diagrams_in(args.section)
     if args.mode is Mode.FULL:
         return render_diagrams(found, fmt)

@@ -193,6 +193,7 @@ Second.
 | `mdpeek DIR -n N` | the first N entries of each directory and sections under each heading, then a `… K more` line |
 | `mdpeek DIR -s PATH[#ID] ...` | whole files or sections from several files, each under `==> PATH <==`; `--structure`, `--full` and `-d` work as for a file |
 | `mdpeek DIR --table PATH#ID ...` | tables from files in the directory; `--format` other than `md` takes one file at a time |
+| `mdpeek DIR --diagram PATH#ID ...`, `--fence PATH#ID ...` | diagrams or fenced blocks; one prints its bare source, several are each labelled under `==> PATH <==` |
 | `--include GLOB` | list these files instead of `*.md` and `*.markdown`; repeatable |
 | `--exclude GLOB` | skip matching files and directories; repeatable |
 
@@ -206,8 +207,9 @@ Second.
   single-title file's `##` sections. A file with several top-level headings
   lists those instead. Section IDs are the file's own, so `PATH#S1.2` from
   the tree is `mdpeek PATH -s S1.2`.
-- **Paths** in `-s` and `--table` are relative to the directory and must stay
-  inside it.
+- **Paths** in `-s`, `--table`, `--diagram` and `--fence` are relative to the
+  directory and must stay inside it. Listing options (`--tables`,
+  `--diagrams`, `--fences`, `--sql`) work on a single file for now.
 - **Order:** the README, then subdirectories, then files, alphabetically.
 - **Skipped:** hidden entries, `node_modules`, `__pycache__`, symlinked
   directories, and directories with no matching files.

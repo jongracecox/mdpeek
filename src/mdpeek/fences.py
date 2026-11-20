@@ -103,16 +103,17 @@ def summary(fence: Fence, *, with_section: bool = True) -> str:
     return " ".join(parts)
 
 
-def render_fences(fences: Sequence[Fence], fmt: Format | str) -> str:
+def render_fences(fences: Sequence[Fence], fmt: Format | str, *, label_single: bool = False) -> str:
     """Fence source for md, or JSON with the source.
 
     A single fence prints its bare source (no summary line, no fence markers),
     ready to pipe on: whoever asked for it by ID has already seen its summary.
     Several fences each get their summary line and fences, so the boundaries
-    are clear.
+    are clear. ``label_single`` labels and fences a single fence too, for
+    callers that show it alongside others.
     """
     fmt = coerce(Format, fmt)
-    if fmt is Format.MD and len(fences) == 1:
+    if fmt is Format.MD and len(fences) == 1 and not label_single:
         return fences[0].source
     if fmt is Format.JSON:
         objects = [_describe(f, source=True) for f in fences]
