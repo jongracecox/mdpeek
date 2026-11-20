@@ -166,6 +166,26 @@ Backoff always record archive reading queue relay checkpoint quietly. Beacon
 dock berth threshold node lantern record. Reconcile zone retire vessel sensor
 carefully nightly hourly calibrate schedule tide usually corridor.
 
+```mermaid
+---
+title: Dispatch flow
+---
+flowchart TD
+    M[Manifest received] --> V{Valid?}
+    V -- no --> R[Return to sender]
+    V -- yes --> A[Approved]
+    A --> D[Dispatch to depot]
+    D --> B{Beacon confirms?}
+    B -- yes --> L[Write to ledger]
+    B -- no --> E[Escalate to shift lead]
+    E --> D
+
+    classDef ok fill:#4c1,color:#000
+    classDef bad fill:#e05d44,color:#fff
+    class L ok
+    class R,E bad
+```
+
 ## Beacons
 
 Calibrate lantern ledger escalate zone pallet parcel steadily schedule threshold
@@ -266,6 +286,15 @@ channel window offset vessel manifest.
 Ledger uplink lantern crate current batch berth handover queue beacon dispatch
 vessel. Crate nightly confirm harbour buoy pallet promptly offset usually
 carefully. Beacon channel corridor record crew lantern schedule dock.
+
+```dot
+digraph ledger {
+    rankdir=LR;
+    relay -> ledger [label="append"];
+    ledger -> archive [label="after 90 days"];
+    ledger -> audit [label="nightly"];
+}
+```
 
 ### Lifecycle
 
@@ -986,6 +1015,16 @@ retry rotate gauge region calibrate quietly depot renew verify window courier.
 Reconcile archive batch hourly depot reliably retry shift network. Promptly
 network reconcile relay crew hourly channel carefully crane tide corridor
 calibrate.
+
+```plantuml
+@startuml
+title Token exchange
+Client -> Gateway: POST /auth (API key)
+Gateway -> Keystore: verify key
+Keystore --> Gateway: ok
+Gateway --> Client: session token (1 h)
+@enduml
+```
 
 ## Endpoints
 

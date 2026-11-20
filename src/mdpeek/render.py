@@ -25,6 +25,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from mdpeek.diagrams import Diagram
+from mdpeek.diagrams import summary as diagram_summary
 from mdpeek.model import Document, Section
 from mdpeek.options import Mode, OnTableError, coerce
 from mdpeek.tables import Table, TableSettings, should_summarise, summary
@@ -39,12 +41,14 @@ def render(
     depth: int | None = None,
     sections: Iterable[str] | None = None,
     tables: TableSettings | None = None,
+    diagram_summaries: bool = True,
 ) -> str:
     """Render ``doc`` and return the text, ending in a newline if not empty.
 
     ``sections`` limits output to those section IDs; depth then counts from
     each one (the section itself is depth 1). ``tables`` controls table
-    summaries in view and full modes (default :class:`TableSettings`). Raises
+    summaries in view and full modes (default :class:`TableSettings`);
+    ``diagram_summaries`` replaces each diagram with one line (default). Raises
     :class:`~mdpeek.model.SectionNotFound` for an unknown ID and
     ``ValueError`` for a depth below 1.
     """
@@ -54,7 +58,7 @@ def render(
     if depth is None and mode is Mode.VIEW:
         depth = DEFAULT_VIEW_DEPTH
 
-    ctx = _Context(doc, mode, depth, tables or TableSettings())
+    ctx = _Context(doc, mode, depth, tables or TableSettings(), diagram_summaries)
     out: list[str] = []
     for root in _roots(doc, sections):
         _render_section(ctx, root, 1, out)
@@ -78,9 +82,13 @@ class _Context:
     mode: Mode
     max_depth: int | None
     tables: TableSettings
+    diagram_summaries: bool
 
     def tables_of(self, section: Section) -> list[Table]:
         return [t for t in self.doc.tables if t.section_id == section.id]
+
+    def diagrams_of(self, section: Section) -> list[Diagram]:
+        return [d for d in self.doc.diagrams if d.section_id == section.id]
 
 
 def _render_section(ctx: _Context, section: Section, rel_depth: int, out: list[str]) -> None:
@@ -119,25 +127,34 @@ def _stub(ctx: _Context, section: Section) -> str:
 
 
 def _table_count(ctx: _Context, section: Section) -> list[str]:
-    count = len(ctx.tables_of(section))
-    if not count:
-        return []
-    return [f"{count} table" if count == 1 else f"{count} tables"]
+    """Counts of the tables and diagrams in a section's own body."""
+    counts = []
+    for count, noun in (
+        (len(ctx.tables_of(section)), "table"),
+        (len(ctx.diagrams_of(section)), "diagram"),
+    ):
+        if count:
+            counts.append(f"{count} {noun}" if count == 1 else f"{count} {noun}s")
+    return counts
 
 
 def _body(ctx: _Context, section: Section) -> list[str]:
     lines = ctx.doc.lines
-    by_start = {t.start: t for t in ctx.tables_of(section)}
+    by_start: dict[int, Table | Diagram] = {t.start: t for t in ctx.tables_of(section)}
+    by_start.update({d.start: d for d in ctx.diagrams_of(section)})
     body: list[str] = []
     i = section.body_start
     while i < section.body_end:
-        table = by_start.get(i)
-        if table is None:
+        block = by_start.get(i)
+        if block is None:
             body.append(lines[i].rstrip("\r\n"))
             i += 1
             continue
-        body.extend(_table_lines(ctx, table))
-        i = table.end
+        if isinstance(block, Diagram):
+            body.extend(_diagram_lines(ctx, block))
+        else:
+            body.extend(_table_lines(ctx, block))
+        i = block.end
 
     while body and not body[0].strip():
         body.pop(0)
@@ -160,3 +177,10 @@ def _table_lines(ctx: _Context, table: Table) -> list[str]:
         return []
     marker = summary(table, ctx.tables)
     return [f"{marker}, raw text below", *raw] if policy is OnTableError.SHOW else [marker]
+
+
+def _diagram_lines(ctx: _Context, diagram: Diagram) -> list[str]:
+    """What view/full output shows in place of a diagram's fenced block."""
+    if ctx.diagram_summaries:
+        return [diagram_summary(diagram)]
+    return [f"[{diagram.id}]", *diagram.raw_text.rstrip("\n").split("\n")]

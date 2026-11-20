@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
+from mdpeek.diagrams import build_diagrams
 from mdpeek.model import PREAMBLE_ID, Document, Section
 from mdpeek.tables import build_tables
 
@@ -90,6 +91,7 @@ def parse(text: str) -> Document:
     _close_subtrees(sections, total)
     doc = Document(text=text, lines=lines, sections=sections)
     doc.tables = build_tables(tokens, lines, lambda line: _section_at(doc, line))
+    doc.diagrams = build_diagrams(tokens, lines, lambda line: _section_at(doc, line))
     return doc
 
 

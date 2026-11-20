@@ -62,3 +62,11 @@ def test_tables_round_trip_their_source_rows(doc):
             assert all(len(row) == table.n_cols for row in table.rows)
         owner = doc.get(table.section_id)
         assert owner.body_start <= table.start < table.end <= owner.body_end
+
+
+def test_diagrams_sit_in_their_sections_and_never_overlap_tables(doc):
+    for diagram in doc.diagrams:
+        owner = doc.get(diagram.section_id)
+        assert owner.body_start <= diagram.start < diagram.end <= owner.body_end
+        for table in doc.tables:
+            assert diagram.end <= table.start or table.end <= diagram.start

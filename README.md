@@ -62,6 +62,34 @@ Reference intro...
 
 `FILE` can be `-` to read from stdin, or an `http(s)://` URL.
 
+## Diagrams
+
+Mermaid, PlantUML (`plantuml`/`puml`), Graphviz (`dot`/`graphviz`) and D2
+fences are replaced by one line in document output; diagram source is rarely
+worth reading inline and is mostly styling.
+
+````console
+$ mdpeek README.md -s S1.6.2
+[S1.6.2] Thresholds
+...
+[D1] mermaid flowchart (19 lines)
+
+$ mdpeek README.md --diagram D1
+flowchart LR
+    A([badge value]) --> B{"value < 2?"}
+    ...
+````
+
+| Command | Shows |
+|---|---|
+| `--diagram ID` | the diagram's bare source, ready to pipe into a renderer; several IDs are each labelled and fenced |
+| `--diagrams` | one summary line per diagram (scoped by `-s`); add `--full` for every source |
+| `--no-diagram-summaries` | show diagrams inline in document output (under a `[Dn]` label) |
+
+The summary gives the language, the diagram type where it's stated
+(`flowchart`, `sequenceDiagram`, `digraph`, ...), its title if it has one,
+and its line count. `--format json|jsonl` works for diagram output too.
+
 ## URLs and caching
 
 ```console
