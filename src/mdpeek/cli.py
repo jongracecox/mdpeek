@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from mdpeek import __version__
 from mdpeek.cache import DEFAULT_TTL, CacheBackend
@@ -14,7 +15,7 @@ from mdpeek.diagrams import DiagramNotFound
 from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
 from mdpeek.fences import FenceNotFound, render_fence_list, render_fences
 from mdpeek.formats import format_rows, to_json
-from mdpeek.library import Library
+from mdpeek.library import Library, resolve_ref
 from mdpeek.model import Document, SectionNotFound
 from mdpeek.options import Engine, Format, Mode, OnTableError
 from mdpeek.render import render
@@ -76,7 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--section",
         action="append",
         metavar="ID",
-        help="show only this section (e.g. S2.1); repeatable; also scopes --tables",
+        help="show only this section (e.g. S2.1), or on a directory PATH or PATH#ID; "
+        "repeatable; also scopes --tables",
     )
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument(
@@ -99,7 +101,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--depth",
         type=_positive_int,
         metavar="N",
-        help="levels to expand, counted from the top or from each --section",
+        help="levels to expand, counted from the top or from each --section; "
+        "on a directory, heading levels listed under each file",
     )
 
     directories = parser.add_argument_group("directories")
@@ -136,7 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--table",
         action="append",
         metavar="ID",
-        help="show a table (e.g. T3): schema and first rows; repeatable",
+        help="show a table (e.g. T3, or PATH#T3 on a directory): schema and first rows; repeatable",
     )
     targets.add_argument(
         "--tables",
@@ -297,34 +300,78 @@ def _load(args: argparse.Namespace) -> tuple[str, SourceInfo]:
     )
 
 
-_DIRECTORY_FLAGS = ("levels", "first", "include", "exclude")
-_FILE_FLAGS = ("section", "depth", "table", "sql", "rows", "cols", "limit", "format", "engine")
+_TREE_FLAGS = ("levels", "first", "include", "exclude")
+_FILE_FLAGS = ("rows", "cols", "limit", "format", "engine", "sql")
 
 
 def _flag(name: str) -> str:
     return "--" + name.replace("_", "-")
 
 
-def _show_directory(args: argparse.Namespace) -> str:
+def _used(args: argparse.Namespace, names: Sequence[str]) -> list[str]:
+    return [_flag(n) for n in names if getattr(args, n) is not None]
+
+
+def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
     _reject_url_flags(args)
-    used = [_flag(f) for f in _FILE_FLAGS if getattr(args, f) is not None]
-    used += ["--tables"] if args.tables else []
+    if args.section or args.table:
+        return _fetch_from_directory(args, settings)
+    used = _used(args, _FILE_FLAGS) + (["--tables"] if args.tables else [])
     used += [_flag(args.mode.value)] if args.mode is not Mode.VIEW else []
     if used:
         raise UsageError(
-            f"{_flags(used)} only {_verb(used)} to a file; "
-            f"run mdpeek on a file in {args.source!r} to use them"
+            f"{_flags(used)} only {_verb(used)} to a file; use -s PATH or --table PATH#ID, "
+            "or run mdpeek on a file in the directory"
         )
     library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
     for skipped in library.skipped:
         print(f"mdpeek: skipped {skipped}", file=sys.stderr)
-    return library.tree(levels=args.levels, first=args.first)
+    return library.tree(levels=args.levels, first=args.first, depth=args.depth)
+
+
+def _fetch_from_directory(args: argparse.Namespace, settings: TableSettings) -> str:
+    """Sections (``-s PATH[#ID]``) or tables (``--table PATH#ID``) from files in a directory."""
+    used = _used(args, _TREE_FLAGS) + _used(args, ("sql",))
+    used += ["--tables"] if args.tables else []
+    if used:
+        raise UsageError(f"{_flags(used)} cannot be combined with -s or --table on a directory")
+    _check_combinations(args)
+
+    groups: dict[str, tuple[Path, list[str | None]]] = {}
+    for raw in args.table or args.section:
+        ref = resolve_ref(args.source, raw)
+        if args.table and ref.item is None:
+            raise UsageError(f"--table needs PATH#ID on a directory, got {raw!r}")
+        groups.setdefault(ref.rel, (ref.path, []))[1].append(ref.item)
+
+    fmt = Format(args.format or Format.MD)
+    plain_data = bool(args.table) and fmt is not Format.MD
+    if plain_data and len(groups) > 1:
+        raise UsageError(f"--format {fmt.value} takes tables from one file at a time")
+
+    blocks: list[str] = []
+    for rel, (path, items) in groups.items():
+        doc = Document.from_path(path)
+        try:
+            if args.table:
+                scoped = argparse.Namespace(**{**vars(args), "table": items})
+                body = _show_tables(doc, scoped, settings)
+            else:
+                sections = None if None in items else [i for i in items if i]
+                body = render(doc, args.mode, args.depth, sections, settings)
+        except (SectionNotFound, TableNotFound) as exc:
+            raise UsageError(f"{rel}: {exc}") from exc
+        blocks.append(body if plain_data else f"==> {rel} <==\n{body}")
+    return "\n".join(blocks)
+
+
+def _reject_tree_flags(args: argparse.Namespace) -> None:
+    used = _used(args, _TREE_FLAGS)
+    if used:
+        raise UsageError(f"{_flags(used)} only {_verb(used)} to a directory")
 
 
 def _check_combinations(args: argparse.Namespace) -> None:
-    used = [_flag(f) for f in _DIRECTORY_FLAGS if getattr(args, f) is not None]
-    if used:
-        raise UsageError(f"{_flags(used)} only {_verb(used)} to a directory")
     if args.engine is not None and args.sql is None:
         raise UsageError("--engine only applies with --sql")
     diagram_mode = bool(args.diagram or args.diagrams or args.fence or args.fences)
@@ -426,13 +473,25 @@ def _run_sql(doc: Document, args: argparse.Namespace) -> str:
     return format_rows(result.columns, rows, fmt)
 
 
+def _table_settings(args: argparse.Namespace) -> TableSettings:
+    return TableSettings(
+        summaries=args.table_summaries,
+        max_cols=args.table_max_cols,
+        max_rows=args.table_max_rows,
+        header_max_chars=args.table_header_max_chars,
+        on_error=args.on_table_error,
+        raw_column_names=args.raw_column_names,
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
     args = build_parser().parse_args(argv)
-    if args.source != "-" and os.path.isdir(args.source):
+    settings = _table_settings(args)
+    if args.source != "-" and not is_url(args.source) and os.path.isdir(args.source):
         try:
-            output = _show_directory(args)
-        except (UsageError, ValueError) as exc:
+            output = _show_directory(args, settings)
+        except (UsageError, SelectionError, ValueError) as exc:
             print(f"mdpeek: {exc}", file=sys.stderr)
             return EXIT_USAGE
         sys.stdout.write(output)
@@ -449,17 +508,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"mdpeek: cannot fetch {args.source!r}: {exc}", file=sys.stderr)
         return EXIT_USAGE
 
-    settings = TableSettings(
-        summaries=args.table_summaries,
-        max_cols=args.table_max_cols,
-        max_rows=args.table_max_rows,
-        header_max_chars=args.table_header_max_chars,
-        on_error=args.on_table_error,
-        raw_column_names=args.raw_column_names,
-    )
     doc = Document.from_text(text)
     doc.source = info
     try:
+        _reject_tree_flags(args)
         _check_combinations(args)
         if args.sql is not None:
             output = _run_sql(doc, args)

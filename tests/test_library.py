@@ -20,7 +20,7 @@ def test_a_file_is_not_a_library(tmp_path: Path) -> None:
         Library.from_path(tmp_path / "a.md")
 
 
-@pytest.mark.parametrize("kwargs", [{"levels": 0}, {"first": 0}])
+@pytest.mark.parametrize("kwargs", [{"levels": 0}, {"first": 0}, {"depth": 0}])
 def test_levels_and_first_must_be_positive(tmp_path: Path, kwargs: dict[str, int]) -> None:
     with pytest.raises(ValueError, match="must be at least 1"):
         Library.from_path(tmp_path).tree(**kwargs)
@@ -84,3 +84,9 @@ def test_unreadable_entries_are_skipped_and_reported(
 )
 def test_glob_match(path: str, pattern: str, expected: bool) -> None:
     assert glob_match(path, pattern) is expected
+
+
+def test_tree_headings_count_their_tables(tmp_path: Path) -> None:
+    write(tmp_path, "data.md", "# Data\n## Sales\n| a | b |\n|---|---|\n| 1 | 2 |\n")
+    lines = Library.from_path(tmp_path).tree(depth=1).splitlines()
+    assert lines[-1] == "    [S1.1] Sales (3, 1 table)"

@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from functools import cache, cached_property
 from pathlib import Path
 
-from mdpeek.model import Document
+from mdpeek.model import Document, Section
 
 INDENT = "  "
 DEFAULT_LEVELS = 1
@@ -180,19 +180,94 @@ class Library:
             display += "/"
         return cls(node, display, scanner.skipped)
 
-    def tree(self, levels: int | None = None, first: int | None = None) -> str:
+    def tree(
+        self,
+        levels: int | None = None,
+        first: int | None = None,
+        depth: int | None = None,
+    ) -> str:
         """The tree, expanding ``levels`` directory levels (default 1).
 
-        ``first`` shows only the first N entries of each directory; the rest
-        are summarised on one line. Raises ``ValueError`` for values below 1.
+        ``depth`` lists each shown file's headings down to that depth,
+        counted below a collapsed title (default: none). ``first`` shows only
+        the first N entries of each directory and the first N sections under
+        each heading; the rest are summarised on one line. Raises
+        ``ValueError`` for values below 1.
         """
         levels = DEFAULT_LEVELS if levels is None else levels
-        for name, value in (("levels", levels), ("first", first)):
+        for name, value in (("levels", levels), ("first", first), ("depth", depth)):
             if value is not None and value < 1:
                 raise ValueError(f"{name} must be at least 1, got {value}")
         out = [_dir_line(self.root, self.display)]
-        _render_entries(self.root, 1, levels, first, out)
+        _render_entries(self.root, 1, _TreeOptions(levels, first, depth or 0), out)
         return "".join(f"{line}\n" for line in out)
+
+
+_ID_SUFFIX = re.compile(r"[SsTt]\d+(?:\.\d+)*")
+
+
+@dataclass(frozen=True)
+class Ref:
+    """A file in a library, optionally narrowed to one section or table."""
+
+    rel: str
+    """The file's path relative to the library root, with ``/`` separators."""
+    path: Path
+    item: str | None = None
+    """A section or table ID, upper-cased, or ``None`` for the whole file."""
+
+
+def resolve_ref(root: str | os.PathLike[str], ref: str) -> Ref:
+    """Resolve ``PATH`` or ``PATH#ID`` against the library at ``root``.
+
+    The path is relative to ``root`` and must stay inside it. Raises
+    ``ValueError`` if it does not name a file there.
+
+    >>> import tempfile, pathlib
+    >>> root = pathlib.Path(tempfile.mkdtemp())
+    >>> (root / "guides").mkdir()
+    >>> _ = (root / "guides" / "install.md").write_text("# Install\\n")
+    >>> ref = resolve_ref(root, "guides/install.md#s1.2")
+    >>> ref.rel, ref.item
+    ('guides/install.md', 'S1.2')
+    >>> resolve_ref(root, "guides/../guides/install.md").item is None
+    True
+    >>> resolve_ref(root, "../secret.md")
+    Traceback (most recent call last):
+    ...
+    ValueError: '../secret.md' is outside the directory
+    """
+    path_part, _, item = ref.rpartition("#")
+    if not path_part or not _ID_SUFFIX.fullmatch(item):
+        path_part, item = ref, ""
+    normal = os.path.normpath(path_part)
+    if os.path.isabs(normal) or normal == ".." or normal.startswith(".." + os.sep):
+        raise ValueError(f"{ref!r} is outside the directory")
+    path = Path(root) / normal
+    if not path.is_file():
+        raise ValueError(_missing_file(Path(root), normal))
+    return Ref(Path(normal).as_posix(), path, item.upper() or None)
+
+
+def _missing_file(root: Path, normal: str) -> str:
+    message = f"no file {Path(normal).as_posix()!r}"
+    if _ID_SUFFIX.fullmatch(normal):
+        return f"{message}; on a directory, name the file: PATH#{normal.upper()}"
+    parent = (root / normal).parent
+    if parent.is_dir():
+        nearby = sorted(
+            e.name for e in parent.iterdir() if e.name.lower().endswith(MARKDOWN_SUFFIXES)
+        )
+        if nearby:
+            message += f"; nearby: {', '.join(nearby[:5])}"
+    return message
+
+
+@dataclass(frozen=True)
+class _TreeOptions:
+    levels: int
+    first: int | None
+    depth: int
 
 
 class _Scanner:
@@ -325,19 +400,19 @@ def _file_line(node: FileNode) -> str:
     return _labelled(node.name, node.title, details)
 
 
-def _render_entries(
-    node: DirNode, depth: int, levels: int, first: int | None, out: list[str]
-) -> None:
-    indent = INDENT * depth
+def _render_entries(node: DirNode, indent_level: int, opts: _TreeOptions, out: list[str]) -> None:
+    indent = INDENT * indent_level
     entries = node.entries()
-    shown = entries if first is None else entries[:first]
+    shown = entries if opts.first is None else entries[: opts.first]
     for entry in shown:
         if isinstance(entry, FileNode):
             out.append(indent + _file_line(entry))
+            if opts.depth:
+                _render_headings(entry, heading_roots(entry.doc), indent_level + 1, 1, opts, out)
             continue
         out.append(indent + _dir_line(entry, entry.name + "/"))
-        if depth < levels:
-            _render_entries(entry, depth + 1, levels, first, out)
+        if indent_level < opts.levels:
+            _render_entries(entry, indent_level + 1, opts, out)
     hidden = entries[len(shown) :]
     if hidden:
         dirs = [e for e in hidden if isinstance(e, DirNode)]
@@ -349,3 +424,47 @@ def _render_entries(
             details.append(_plural(len(files), "file"))
         details.append(_plural(sum(e.line_count for e in hidden), "line"))
         out.append(f"{indent}… {len(hidden)} more ({', '.join(details)})")
+
+
+def heading_roots(doc: Document) -> list[Section]:
+    """The sections a tree lists first: under a collapsed title, else the top level.
+
+    >>> doc = Document.from_text("# Guide\\n## Install\\n## Use\\n")
+    >>> [s.id for s in heading_roots(doc)]
+    ['S1.1', 'S1.2']
+    >>> [s.id for s in heading_roots(Document.from_text("# A\\n# B\\n"))]
+    ['S1', 'S2']
+    """
+    top = [s for s in doc.sections if not s.is_preamble]
+    return top[0].children if len(top) == 1 else top
+
+
+def _render_headings(
+    node: FileNode,
+    sections: list[Section],
+    indent_level: int,
+    rel_depth: int,
+    opts: _TreeOptions,
+    out: list[str],
+) -> None:
+    indent = INDENT * indent_level
+    shown = sections if opts.first is None else sections[: opts.first]
+    lines = node.doc.lines
+    for section in shown:
+        at_limit = rel_depth >= opts.depth
+        details = [str(section.body_line_count(lines))]
+        if at_limit and section.children:
+            details.append(f"{len(section.children)} sub")
+        tables = sum(1 for t in node.doc.tables if t.section_id == section.id)
+        if tables:
+            details.append(_plural(tables, "table"))
+        out.append(f"{indent}[{section.id}] {section.title}".rstrip() + f" ({', '.join(details)})")
+        if not at_limit:
+            _render_headings(node, section.children, indent_level + 1, rel_depth + 1, opts, out)
+    hidden = sections[len(shown) :]
+    if hidden:
+        span = sum(s.end - s.start for s in hidden)
+        out.append(
+            f"{indent}… {len(hidden)} more ({_plural(len(hidden), 'section')}, "
+            f"{_plural(span, 'line')})"
+        )
