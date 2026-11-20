@@ -8,10 +8,18 @@ from collections.abc import Sequence
 
 from mdpeek import __version__
 from mdpeek.model import Document, SectionNotFound
-from mdpeek.options import Mode
+from mdpeek.options import Format, Mode, OnTableError
 from mdpeek.render import render
+from mdpeek.table_output import render_table, render_table_list, select, truncation_note
+from mdpeek.tables import SelectionError, TableNotFound, TableSettings
 
 EXIT_USAGE = 2
+
+_DATA_FLAGS = ("rows", "cols", "limit", "format")
+
+
+class UsageError(Exception):
+    """A problem with the arguments or the document, reported on stderr."""
 
 
 def _positive_int(value: str) -> int:
@@ -24,7 +32,12 @@ def _positive_int(value: str) -> int:
     return number
 
 
+def _column_list(value: str) -> list[str]:
+    return [column for column in (c.strip() for c in value.split(",")) if column]
+
+
 def build_parser() -> argparse.ArgumentParser:
+    defaults = TableSettings()
     parser = argparse.ArgumentParser(
         prog="mdpeek",
         description="Progressively expose a markdown document by section.",
@@ -36,7 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--section",
         action="append",
         metavar="ID",
-        help="show only this section (e.g. S2.1); repeatable",
+        help="show only this section (e.g. S2.1); repeatable; also scopes --tables",
     )
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument(
@@ -51,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="mode",
         action="store_const",
         const=Mode.FULL,
-        help="all content (down to --depth, if given)",
+        help="all content (down to --depth); with --table/--tables, every row",
     )
     parser.set_defaults(mode=Mode.VIEW)
     parser.add_argument(
@@ -61,14 +74,110 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="levels to expand, counted from the top or from each --section",
     )
+
+    tables = parser.add_argument_group("tables")
+    targets = tables.add_mutually_exclusive_group()
+    targets.add_argument(
+        "--table",
+        action="append",
+        metavar="ID",
+        help="show a table (e.g. T3): schema and first rows; repeatable",
+    )
+    targets.add_argument(
+        "--tables",
+        action="store_true",
+        help="list every table (in --section scope); with --full/--rows/--cols, show each",
+    )
+    tables.add_argument("--rows", metavar="RANGE", help="rows to show: N, A-B, A- or -B (1-based)")
+    tables.add_argument("--cols", type=_column_list, metavar="A,B", help="columns to show, by name")
+    tables.add_argument(
+        "--limit", type=_positive_int, metavar="N", help="maximum rows to show (default 50)"
+    )
+    tables.add_argument(
+        "--format",
+        choices=[f.value for f in Format],
+        default=None,
+        help="output format for table data (default md)",
+    )
+    tables.add_argument(
+        "--table-summaries",
+        action=argparse.BooleanOptionalAction,
+        default=defaults.summaries,
+        help="replace large tables with a one-line summary in document output",
+    )
+    tables.add_argument(
+        "--table-max-cols",
+        type=_positive_int,
+        default=defaults.max_cols,
+        metavar="N",
+        help=f"summarise tables wider than N columns (default {defaults.max_cols})",
+    )
+    tables.add_argument(
+        "--table-max-rows",
+        type=_positive_int,
+        default=defaults.max_rows,
+        metavar="N",
+        help=f"summarise tables longer than N rows (default {defaults.max_rows})",
+    )
+    tables.add_argument(
+        "--table-header-max-chars",
+        type=_positive_int,
+        default=defaults.header_max_chars,
+        metavar="N",
+        help="list column names in a summary only if they fit in N characters "
+        f"(default {defaults.header_max_chars})",
+    )
+    tables.add_argument(
+        "--on-table-error",
+        choices=[p.value for p in OnTableError],
+        default=OnTableError.SHOW.value,
+        help="how to show a table that could not be parsed (default show)",
+    )
     return parser
 
 
 def _read_source(source: str) -> str:
     if source == "-":
         return sys.stdin.read()
-    with open(source, encoding="utf-8", newline="") as handle:
+    with open(source, encoding="utf-8", errors="replace", newline="") as handle:
         return handle.read()
+
+
+def _check_combinations(args: argparse.Namespace) -> None:
+    table_mode = bool(args.table or args.tables)
+    if not table_mode:
+        used = [f"--{flag}" for flag in _DATA_FLAGS if getattr(args, flag) is not None]
+        if used:
+            raise UsageError(f"{', '.join(used)} only apply with --table or --tables")
+        return
+    if args.mode is Mode.STRUCTURE:
+        raise UsageError("--structure cannot be combined with --table or --tables")
+    if args.depth is not None:
+        raise UsageError("--depth cannot be combined with --table or --tables")
+    if args.table and args.section:
+        raise UsageError("--section cannot be combined with --table (table IDs are global)")
+
+
+def _show_tables(doc: Document, args: argparse.Namespace, settings: TableSettings) -> str:
+    fmt = Format(args.format or Format.MD)
+    full = args.mode is Mode.FULL
+    wants_data = bool(args.table) or full or args.rows is not None or args.cols is not None
+    tables = [doc.table(t) for t in args.table] if args.table else doc.tables_in(args.section)
+    if not wants_data:
+        return render_table_list(tables, settings, fmt)
+
+    selections = [
+        select(t, rows=args.rows, cols=args.cols, limit=args.limit, full=full) for t in tables
+    ]
+    for selection in selections:
+        note = truncation_note(selection)
+        if note:
+            print(note, file=sys.stderr)
+    if fmt is Format.JSON and len(selections) > 1:
+        blocks = [render_table(s, fmt).rstrip("\n") for s in selections]
+        return "[" + ",".join(blocks) + "]\n"
+    separator = "" if fmt is Format.JSONL else "\n"
+    return separator.join(render_table(s, fmt) for s in selections)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -76,15 +185,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         text = _read_source(args.source)
-    except (OSError, UnicodeDecodeError) as exc:
-        reason = exc.strerror if isinstance(exc, OSError) and exc.strerror else str(exc)
-        print(f"mdpeek: cannot read {args.source!r}: {reason}", file=sys.stderr)
+    except OSError as exc:
+        print(f"mdpeek: cannot read {args.source!r}: {exc.strerror or exc}", file=sys.stderr)
         return EXIT_USAGE
 
+    settings = TableSettings(
+        summaries=args.table_summaries,
+        max_cols=args.table_max_cols,
+        max_rows=args.table_max_rows,
+        header_max_chars=args.table_header_max_chars,
+        on_error=args.on_table_error,
+    )
     doc = Document.from_text(text)
     try:
-        output = render(doc, args.mode, args.depth, args.section)
-    except SectionNotFound as exc:
+        _check_combinations(args)
+        if args.table or args.tables:
+            output = _show_tables(doc, args, settings)
+        else:
+            output = render(doc, args.mode, args.depth, args.section, settings)
+    except (UsageError, SectionNotFound, TableNotFound, SelectionError) as exc:
         print(f"mdpeek: {exc}", file=sys.stderr)
         return EXIT_USAGE
     sys.stdout.write(output)

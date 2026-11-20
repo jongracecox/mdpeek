@@ -26,11 +26,11 @@ def test_reads_stdin(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixt
     assert capsys.readouterr().out == "[S1] A\nbody\n"
 
 
-def test_non_utf8_file_is_a_read_error(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_non_utf8_bytes_are_replaced(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
     path = tmp_path / "latin1.md"
-    path.write_bytes(b"# caf\xe9\n")
-    assert main([str(path)]) == 2
-    assert "cannot read" in capsys.readouterr().err
+    path.write_bytes(b"# caf\xe9\nbody\n")
+    assert main([str(path)]) == 0
+    assert capsys.readouterr().out == "[S1] caf\ufffd\nbody\n"
 
 
 def test_depth_must_be_a_number(capsys: pytest.CaptureFixture[str]) -> None:
