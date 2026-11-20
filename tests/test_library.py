@@ -90,3 +90,32 @@ def test_tree_headings_count_their_tables(tmp_path: Path) -> None:
     write(tmp_path, "data.md", "# Data\n## Sales\n| a | b |\n|---|---|\n| 1 | 2 |\n")
     lines = Library.from_path(tmp_path).tree(depth=1).splitlines()
     assert lines[-1] == "    [S1.1] Sales (3, 1 table)"
+
+
+def test_budget_must_be_positive(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="budget must be at least 1"):
+        Library.from_path(tmp_path).fit(0)
+
+
+def test_fit_matches_the_tree_it_describes(tmp_path: Path) -> None:
+    for name in ("a", "b", "c"):
+        write(tmp_path, f"{name}/deep/{name}.md", f"# {name}\n## one\n## two\n")
+    library = Library.from_path(tmp_path)
+    for budget in range(1, 25):
+        fit = library.fit(budget)
+        tree = library.tree(levels=fit.levels, depth=fit.depth or None, first=fit.first)
+        assert tree.count("\n") == fit.lines
+        if fit.next_step is not None:
+            assert fit.lines <= budget < fit.next_lines
+
+
+def test_budget_on_an_empty_directory(tmp_path: Path) -> None:
+    fit = Library.from_path(tmp_path).fit()
+    assert (fit.levels, fit.depth, fit.first, fit.lines, fit.next_step) == (1, 0, None, 1, None)
+
+
+def test_a_flat_directory_over_budget_suggests_more_entries(tmp_path: Path) -> None:
+    for i in range(10):
+        write(tmp_path, f"note{i}.md", "plain text\n")
+    fit = Library.from_path(tmp_path).fit(5)
+    assert (fit.first, fit.lines, fit.next_step, fit.next_lines) == (3, 5, "-n 4", 6)

@@ -50,14 +50,17 @@ fences take `--format json|jsonl`, not csv/tsv.
 ## Directories
 
 ```sh
-mdpeek docs/ -L 2 -n 5              # tree: file titles, line/section/table counts
+mdpeek docs/                        # tree fitted to 150 lines; stderr says what's next
+mdpeek docs/ --budget 400           # a bigger tree
+mdpeek docs/ -L 2 -n 5              # fixed: 2 levels, first 5 entries; no budget
 mdpeek docs/ -d 1                   # also each file's headings
 mdpeek docs/ -s guides/install.md#S1.2 -s notes.md   # a section, a whole file
 mdpeek docs/ --table guides/deploy.md#T1             # also --diagram, --fence
 mdpeek docs/ --exclude reference --include '*.md'    # gitignore-style globs
 ```
 
-`-L` limits directory levels, `-n` files per level. Address files as
+Trees show file titles and line/section/table counts. `-L` limits directory
+levels, `-n` entries per level; giving `-L`, `-d` or `-n` turns the budget off. Address files as
 `PATH#ID`, relative to the directory; IDs are the file's own. `--tables`,
 `--diagrams`, `--fences` and `--sql` work on one file, not a directory.
 

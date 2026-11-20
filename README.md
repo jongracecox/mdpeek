@@ -161,7 +161,7 @@ Point mdpeek at a directory to see its markdown files as a tree. Every entry
 is named by its path, so you open anything you see by pointing mdpeek at it.
 
 ```console
-$ mdpeek docs/
+$ mdpeek docs/ -L 1
 docs/ Handbook (9 files, 3 dirs, 37 lines)
   README.md Handbook (2 lines)
   guides/ Guides (4 files, 1 dir, 16 lines)
@@ -199,8 +199,9 @@ Second.
 
 | Command | Shows |
 |---|---|
-| `mdpeek DIR` | the directory's entries; subdirectories collapsed to totals |
-| `mdpeek DIR -L N` | N directory levels expanded |
+| `mdpeek DIR` | as much of the tree as fits in 150 lines (see **Budget**) |
+| `mdpeek DIR --budget LINES` | as much as fits in LINES; any `-L`, `-d` or `-n` given stays fixed |
+| `mdpeek DIR -L N` | N directory levels expanded, subdirectories below collapsed to totals |
 | `mdpeek DIR -d N` | each listed file's headings, N levels below its title |
 | `mdpeek DIR -n N` | the first N entries of each directory and sections under each heading, then a `… K more` line |
 | `mdpeek DIR -s PATH[#ID] ...` | whole files or sections from several files, each under `==> PATH <==`; `--structure`, `--full` and `-d` work as for a file |
@@ -209,6 +210,13 @@ Second.
 | `--include GLOB` | list these files instead of `*.md` and `*.markdown`; repeatable |
 | `--exclude GLOB` | skip matching files and directories; repeatable |
 
+- **Budget:** with no `-L`, `-d` or `-n`, mdpeek expands directory levels
+  until the next one would go over the budget (150 lines by default), then
+  adds heading levels once every directory is shown. If even the top level
+  is too long, it shows the first N entries that fit. A note on stderr says
+  what it chose and what the next step would cost, e.g.
+  `mdpeek: tree: showing -L 2 to fit --budget 150; -L 3 is 161 lines`.
+  Giving `-L`, `-d` or `-n` without `--budget` turns the budget off.
 - **Titles:** a file is labelled with its only top-level heading, or the
   first of several with `+N` for the rest. A directory takes its title from
   its `README.md` (or `index.md`), which is listed first.
@@ -314,6 +322,8 @@ from mdpeek import Library
 
 library = Library.from_path("docs/", exclude=["drafts"])
 print(library.tree(levels=2, first=10, depth=1))
+fit = library.fit(budget=150)  # TreeFit(levels, depth, first, lines, next_step, ...)
+print(library.tree(levels=fit.levels, depth=fit.depth or None, first=fit.first))
 ```
 
 ## License
