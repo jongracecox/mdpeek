@@ -148,7 +148,7 @@ Feature: Showing tables on demand
       | --table T9               | no table 'T9'; available: T1, T2                         |
       | --table T1 --rows 9-3    | invalid row range '9-3'                                  |
       | --table T1 --cols colour | T1 has no column 'colour'; columns: id, item_name        |
-      | --rows 1                 | --rows only apply with --table, --tables or --sql        |
+      | --rows 1                 | --rows only applies with --table, --tables or --sql      |
       | --table T1 --structure   | --structure cannot be combined with --table, --tables    |
       | --table T1 -s S1         | --section cannot be combined with --table                |
       | --tables --depth 2       | --depth cannot be combined with --table, --tables        |

@@ -33,6 +33,7 @@ wheel builds and won't pick up code changes.
 src/mdpeek/
 ├── __init__.py   # Public API and version
 ├── __main__.py   # python -m mdpeek
+├── cache.py         # memory / disk caches for fetched URLs
 ├── cli.py           # argparse entry point
 ├── engines.py       # SQL over tables: sqlite, optional duckdb
 ├── formats.py       # md / csv / tsv / json / jsonl output
@@ -40,6 +41,7 @@ src/mdpeek/
 ├── options.py       # StrEnum API options and coerce()
 ├── parse.py         # markdown -> section tree and tables (markdown-it)
 ├── render.py        # view / structure / full output
+├── source.py        # load from path, URL (fetch + cache) or stdin
 ├── table_output.py  # --table / --tables selection and formatting
 └── tables.py        # table extraction, typing, summaries
 tests/
@@ -61,6 +63,10 @@ uv run nox                     # Full matrix: Python 3.11, 3.12, 3.13, 3.14
 uv run nox -s tests-3.14       # One Python version
 uv run nox -s tests_duckdb     # With the optional duckdb engine installed
 ```
+
+Tests never touch your real cache: an autouse fixture points
+`MDPEEK_CACHE_DIR` at a temporary directory, and URL tests use a local HTTP
+server fixture (`http_server`), never the network.
 
 DuckDB tests skip when the extra isn't installed; `tests_duckdb` (and the
 `test (duckdb)` CI job) runs them.
