@@ -11,9 +11,10 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from mdpeek.options import Mode
+from mdpeek.options import Engine, Mode
 
 if TYPE_CHECKING:
+    from mdpeek.engines import QueryResult
     from mdpeek.tables import Table, TableSettings
 
 PREAMBLE_ID = "S0"
@@ -141,6 +142,20 @@ class Document:
             if table.id == wanted:
                 return table
         raise TableNotFound(table_id, [t.id for t in self.tables])
+
+    def query(
+        self,
+        sql: str,
+        engine: Engine | str = Engine.AUTO,
+        sections: Iterable[str] | None = None,
+    ) -> QueryResult:
+        """Run ``sql`` over the tables (as ``t1``, ``t2``, ...) in ``sections``.
+
+        See :mod:`mdpeek.engines` for engine selection and errors.
+        """
+        from mdpeek.engines import run_query
+
+        return run_query(self.tables_in(sections), sql, engine)
 
     def tables_in(self, section_ids: Iterable[str] | None = None) -> list[Table]:
         """Tables in the given sections' subtrees, or all tables if ``None``."""

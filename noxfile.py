@@ -29,3 +29,17 @@ def tests(session: nox.Session) -> None:
         env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
     )
     session.run("pytest", *session.posargs)
+
+
+@nox.session(python=PYTHON_VERSIONS[-1])
+def tests_duckdb(session: nox.Session) -> None:
+    """Run the test suite with the optional duckdb engine installed."""
+    session.run_install(
+        "uv",
+        "sync",
+        "--active",
+        "--group=dev",
+        "--extra=duckdb",
+        env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
+    )
+    session.run("pytest", *session.posargs)

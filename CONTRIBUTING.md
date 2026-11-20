@@ -33,11 +33,15 @@ wheel builds and won't pick up code changes.
 src/mdpeek/
 ├── __init__.py   # Public API and version
 ├── __main__.py   # python -m mdpeek
-├── cli.py        # argparse entry point
-├── model.py      # Section / Document tree and ID lookup
-├── options.py    # StrEnum API options and coerce()
-├── parse.py      # markdown -> section tree (markdown-it)
-└── render.py     # view / structure / full output
+├── cli.py           # argparse entry point
+├── engines.py       # SQL over tables: sqlite, optional duckdb
+├── formats.py       # md / csv / tsv / json / jsonl output
+├── model.py         # Section / Document tree and ID lookup
+├── options.py       # StrEnum API options and coerce()
+├── parse.py         # markdown -> section tree and tables (markdown-it)
+├── render.py        # view / structure / full output
+├── table_output.py  # --table / --tables selection and formatting
+└── tables.py        # table extraction, typing, summaries
 tests/
 ├── features/           # Gherkin specs of CLI behaviour
 ├── step_defs/          # shared pytest-bdd steps for the features
@@ -55,7 +59,11 @@ See [CLAUDE.md](CLAUDE.md) for architecture and conventions.
 uv run pytest                  # Quick run on the active Python version
 uv run nox                     # Full matrix: Python 3.11, 3.12, 3.13, 3.14
 uv run nox -s tests-3.14       # One Python version
+uv run nox -s tests_duckdb     # With the optional duckdb engine installed
 ```
+
+DuckDB tests skip when the extra isn't installed; `tests_duckdb` (and the
+`test (duckdb)` CI job) runs them.
 
 `noxfile.py` is the source of truth for the test matrix. To add a Python
 version, append it to `PYTHON_VERSIONS`, add the classifier in

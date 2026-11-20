@@ -7,10 +7,18 @@ import sys
 from collections.abc import Sequence
 
 from mdpeek import __version__
+from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
+from mdpeek.formats import format_rows, to_json
 from mdpeek.model import Document, SectionNotFound
-from mdpeek.options import Format, Mode, OnTableError
+from mdpeek.options import Engine, Format, Mode, OnTableError
 from mdpeek.render import render
-from mdpeek.table_output import render_table, render_table_list, select, truncation_note
+from mdpeek.table_output import (
+    DEFAULT_LIMIT,
+    render_table,
+    render_table_list,
+    select,
+    truncation_note,
+)
 from mdpeek.tables import SelectionError, TableNotFound, TableSettings
 
 EXIT_USAGE = 2
@@ -88,6 +96,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="list every table (in --section scope); with --full/--rows/--cols, show each",
     )
+    targets.add_argument(
+        "--sql",
+        metavar="QUERY",
+        help="run SQL over the tables (in --section scope), loaded as t1, t2, ...",
+    )
+    tables.add_argument(
+        "--engine",
+        choices=[e.value for e in Engine],
+        default=None,
+        help="SQL engine (default auto: duckdb if installed, else sqlite; or set MDPEEK_ENGINE)",
+    )
     tables.add_argument("--rows", metavar="RANGE", help="rows to show: N, A-B, A- or -B (1-based)")
     tables.add_argument("--cols", type=_column_list, metavar="A,B", help="columns to show, by name")
     tables.add_argument(
@@ -144,16 +163,22 @@ def _read_source(source: str) -> str:
 
 
 def _check_combinations(args: argparse.Namespace) -> None:
-    table_mode = bool(args.table or args.tables)
+    if args.engine is not None and args.sql is None:
+        raise UsageError("--engine only applies with --sql")
+    if args.sql is not None:
+        used = [f"--{flag}" for flag in ("rows", "cols") if getattr(args, flag) is not None]
+        if used:
+            raise UsageError(f"{', '.join(used)} cannot be combined with --sql")
+    table_mode = bool(args.table or args.tables or args.sql is not None)
     if not table_mode:
         used = [f"--{flag}" for flag in _DATA_FLAGS if getattr(args, flag) is not None]
         if used:
-            raise UsageError(f"{', '.join(used)} only apply with --table or --tables")
+            raise UsageError(f"{', '.join(used)} only apply with --table, --tables or --sql")
         return
     if args.mode is Mode.STRUCTURE:
-        raise UsageError("--structure cannot be combined with --table or --tables")
+        raise UsageError("--structure cannot be combined with --table, --tables or --sql")
     if args.depth is not None:
-        raise UsageError("--depth cannot be combined with --table or --tables")
+        raise UsageError("--depth cannot be combined with --table, --tables or --sql")
     if args.table and args.section:
         raise UsageError("--section cannot be combined with --table (table IDs are global)")
 
@@ -180,6 +205,33 @@ def _show_tables(doc: Document, args: argparse.Namespace, settings: TableSetting
     return separator.join(render_table(s, fmt) for s in selections)
 
 
+def _run_sql(doc: Document, args: argparse.Namespace) -> str:
+    tables = doc.tables_in(args.section)
+    for table in tables:
+        if not table.ok:
+            print(f"mdpeek: skipped {table.id} (not parsed: {table.error})", file=sys.stderr)
+    result: QueryResult = run_query(tables, args.sql, args.engine or Engine.AUTO)
+    fmt = Format(args.format or Format.MD)
+    limit = result.total if args.mode is Mode.FULL else (args.limit or DEFAULT_LIMIT)
+    rows = result.rows[:limit]
+    if len(rows) < result.total:
+        print(
+            f"mdpeek: query: showing {len(rows)} of {result.total} rows (use --limit or --full)",
+            file=sys.stderr,
+        )
+    if fmt is Format.JSON:
+        return to_json(
+            {
+                "engine": result.engine.value,
+                "columns": result.columns,
+                "rows": rows,
+                "total": result.total,
+                "shown": len(rows),
+            }
+        )
+    return format_rows(result.columns, rows, fmt)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
     args = build_parser().parse_args(argv)
@@ -199,11 +251,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     doc = Document.from_text(text)
     try:
         _check_combinations(args)
-        if args.table or args.tables:
+        if args.sql is not None:
+            output = _run_sql(doc, args)
+        elif args.table or args.tables:
             output = _show_tables(doc, args, settings)
         else:
             output = render(doc, args.mode, args.depth, args.section, settings)
-    except (UsageError, SectionNotFound, TableNotFound, SelectionError) as exc:
+    except (
+        UsageError,
+        SectionNotFound,
+        TableNotFound,
+        SelectionError,
+        QueryError,
+        EngineUnavailable,
+        ValueError,
+    ) as exc:
         print(f"mdpeek: {exc}", file=sys.stderr)
         return EXIT_USAGE
     sys.stdout.write(output)
