@@ -3,14 +3,14 @@
 import re
 
 import pytest
-from conftest import SMALL_FIXTURES, read_fixture
+from conftest import ALL_FIXTURES, read_fixture
 
 from mdpeek.parse import parse
 
 ID_PATTERN = re.compile(r"^S(0|[1-9]\d*(\.[1-9]\d*)*)$")
 
 
-@pytest.fixture(params=SMALL_FIXTURES, ids=lambda p: p.name)
+@pytest.fixture(params=ALL_FIXTURES, ids=lambda p: p.name)
 def doc(request):
     return parse(read_fixture(request.param))
 

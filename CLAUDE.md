@@ -12,6 +12,7 @@ uv run mdpeek --version                 # Run locally
 uv run pytest                           # Unit, doctest and BDD tests with coverage
 uv run nox                              # Tests across Python 3.11–3.14
 uv run nox -s tests_duckdb              # Tests with the duckdb extra
+uv run nox -s eval                      # Efficiency eval vs evals/baseline.json
 prek run --all-files                    # ruff, ty and hygiene hooks
 uv tool install --force --reinstall .   # Install globally
 ```
@@ -38,5 +39,8 @@ uv tool install --force --reinstall .   # Install globally
   `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`. Use `!` or a
   `BREAKING CHANGE:` footer for breaking changes. Scopes are module names (e.g.
   `feat(tables): …`, `fix(cli): …`).
+- **Output size is tracked.** `evals/baseline.json` caps what each eval
+  scenario may cost. If a change grows output, update the baseline in the same
+  PR and explain why; never loosen the tolerance to make CI pass.
 - Versions come from git tags (`hatch-vcs`); never add a `version` field.
 - Releases: see CONTRIBUTING.md.
