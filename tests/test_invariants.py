@@ -70,3 +70,14 @@ def test_diagrams_sit_in_their_sections_and_never_overlap_tables(doc):
         assert owner.body_start <= diagram.start < diagram.end <= owner.body_end
         for table in doc.tables:
             assert diagram.end <= table.start or table.end <= diagram.start
+
+
+def test_fences_cover_every_diagram(doc):
+    by_start = {f.start: f for f in doc.fences}
+    for diagram in doc.diagrams:
+        fence = by_start[diagram.start]
+        assert fence.diagram_id == diagram.id
+        assert fence.end == diagram.end
+    for fence in doc.fences:
+        owner = doc.get(fence.section_id)
+        assert owner.body_start <= fence.start < fence.end <= owner.body_end

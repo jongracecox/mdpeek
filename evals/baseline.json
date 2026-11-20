@@ -6,5 +6,6 @@
   "depot-capacity": 207,
   "depots-per-region": 124,
   "sensor-calibration": 122,
-  "dispatch-flow": 606
+  "dispatch-flow": 588,
+  "install-command": 144
 }

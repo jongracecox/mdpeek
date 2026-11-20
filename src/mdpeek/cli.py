@@ -11,6 +11,7 @@ from mdpeek.cache import DEFAULT_TTL, CacheBackend
 from mdpeek.diagram_output import render_diagram_list, render_diagrams
 from mdpeek.diagrams import DiagramNotFound
 from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
+from mdpeek.fences import FenceNotFound, render_fence_list, render_fences
 from mdpeek.formats import format_rows, to_json
 from mdpeek.model import Document, SectionNotFound
 from mdpeek.options import Engine, Format, Mode, OnTableError
@@ -119,6 +120,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--diagrams",
         action="store_true",
         help="list every diagram (in --section scope); with --full, show each",
+    )
+    targets.add_argument(
+        "--fence",
+        action="append",
+        metavar="ID",
+        help="print a fenced block's source (e.g. F3); repeatable",
+    )
+    targets.add_argument(
+        "--fences",
+        action="store_true",
+        help="list every fenced block: section, language, lines (in --section scope); "
+        "with --full, show each",
     )
     targets.add_argument(
         "--sql",
@@ -250,7 +263,7 @@ def _load(args: argparse.Namespace) -> tuple[str, SourceInfo]:
 def _check_combinations(args: argparse.Namespace) -> None:
     if args.engine is not None and args.sql is None:
         raise UsageError("--engine only applies with --sql")
-    diagram_mode = bool(args.diagram or args.diagrams)
+    diagram_mode = bool(args.diagram or args.diagrams or args.fence or args.fences)
     data_mode = bool(args.table or args.tables or args.sql is not None)
     slicing = [f"--{f}" for f in ("rows", "cols", "limit") if getattr(args, f) is not None]
     if args.sql is not None:
@@ -259,7 +272,7 @@ def _check_combinations(args: argparse.Namespace) -> None:
             raise UsageError(f"{', '.join(used)} cannot be combined with --sql")
     if slicing and not data_mode:
         raise UsageError(f"{_flags(slicing)} only {_verb(slicing)} with --table, --tables or --sql")
-    targets = "--table, --tables, --sql, --diagram or --diagrams"
+    targets = "--table, --tables, --sql, --diagram(s) or --fence(s)"
     if not (data_mode or diagram_mode):
         if args.format is not None:
             raise UsageError(f"--format only applies with {targets}")
@@ -268,14 +281,23 @@ def _check_combinations(args: argparse.Namespace) -> None:
         raise UsageError(f"--structure cannot be combined with {targets}")
     if args.depth is not None:
         raise UsageError(f"--depth cannot be combined with {targets}")
-    if (args.table or args.diagram) and args.section:
+    if (args.table or args.diagram or args.fence) and args.section:
         raise UsageError(
-            "--section cannot be combined with --table or --diagram (their IDs are global)"
+            "--section cannot be combined with --table, --diagram or --fence (their IDs are global)"
         )
     if diagram_mode and args.format in (Format.CSV.value, Format.TSV.value):
-        raise UsageError(
-            f"--format {args.format} does not apply to diagrams; use md, json or jsonl"
-        )
+        what = "fenced blocks" if (args.fence or args.fences) else "diagrams"
+        raise UsageError(f"--format {args.format} does not apply to {what}; use md, json or jsonl")
+
+
+def _show_fences(doc: Document, args: argparse.Namespace) -> str:
+    fmt = Format(args.format or Format.MD)
+    if args.fence:
+        return render_fences([doc.fence(f) for f in args.fence], fmt)
+    found = doc.fences_in(args.section)
+    if args.mode is Mode.FULL:
+        return render_fences(found, fmt)
+    return render_fence_list(found, fmt)
 
 
 def _show_diagrams(doc: Document, args: argparse.Namespace) -> str:
@@ -373,6 +395,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = _show_tables(doc, args, settings)
         elif args.diagram or args.diagrams:
             output = _show_diagrams(doc, args)
+        elif args.fence or args.fences:
+            output = _show_fences(doc, args)
         else:
             output = render(
                 doc, args.mode, args.depth, args.section, settings, args.diagram_summaries
@@ -382,6 +406,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         SectionNotFound,
         TableNotFound,
         DiagramNotFound,
+        FenceNotFound,
         SelectionError,
         QueryError,
         EngineUnavailable,

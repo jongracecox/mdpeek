@@ -74,3 +74,13 @@ steps = [
   ["--diagram", "D1"],
 ]
 expect = "B -- no --> E[Escalate to shift lead]"
+
+[[scenario]]
+name = "install-command"
+question = "What command installs the command line tools?"
+steps = [
+  ["--structure", "-d", "1"],
+  ["--fences", "-s", "S2"],
+  ["--fence", "F1"],
+]
+expect = "pip install lanternfish"

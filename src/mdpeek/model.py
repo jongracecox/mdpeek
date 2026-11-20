@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from mdpeek.cache import Cache
     from mdpeek.diagrams import Diagram
     from mdpeek.engines import QueryResult
+    from mdpeek.fences import Fence
     from mdpeek.options import CacheBackend
     from mdpeek.source import SourceInfo
     from mdpeek.tables import Table, TableSettings
@@ -93,6 +94,8 @@ class Document:
     """Top-level GFM tables in document order (``T1..Tn``)."""
     diagrams: list[Diagram] = field(default_factory=list)
     """Top-level mermaid/PlantUML/Graphviz/D2 fences in document order (``D1..Dn``)."""
+    fences: list[Fence] = field(default_factory=list)
+    """Every top-level fenced block in document order (``F1..Fn``), diagrams included."""
     source: SourceInfo | None = None
     """Where the text came from (path, URL, stdin), and whether it was cached."""
 
@@ -219,6 +222,23 @@ class Document:
             return list(self.diagrams)
         scope = {s.id for section_id in section_ids for s in self.get(section_id).walk()}
         return [d for d in self.diagrams if d.section_id in scope]
+
+    def fence(self, fence_id: str) -> Fence:
+        """Return the fenced block with ``fence_id`` (case-insensitive)."""
+        from mdpeek.fences import FenceNotFound
+
+        wanted = fence_id.strip().upper()
+        for fence in self.fences:
+            if fence.id == wanted:
+                return fence
+        raise FenceNotFound(fence_id, [f.id for f in self.fences])
+
+    def fences_in(self, section_ids: Iterable[str] | None = None) -> list[Fence]:
+        """Fenced blocks in the given sections' subtrees, or all if ``None``."""
+        if section_ids is None:
+            return list(self.fences)
+        scope = {s.id for section_id in section_ids for s in self.get(section_id).walk()}
+        return [f for f in self.fences if f.section_id in scope]
 
     def tables_in(self, section_ids: Iterable[str] | None = None) -> list[Table]:
         """Tables in the given sections' subtrees, or all tables if ``None``."""
