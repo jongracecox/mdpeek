@@ -143,6 +143,51 @@ The cache lives in `$MDPEEK_CACHE_DIR`, else `$XDG_CACHE_HOME/mdpeek`, else
 `~/.cache/mdpeek`, readable only by you. Requests identify as
 `mdpeek/<version>`.
 
+## Directories
+
+Point mdpeek at a directory to see its markdown files as a tree. Every entry
+is named by its path, so you open anything you see by pointing mdpeek at it.
+
+```console
+$ mdpeek docs/
+docs/ Handbook (9 files, 3 dirs, 37 lines)
+  README.md Handbook (2 lines)
+  guides/ Guides (4 files, 1 dir, 16 lines)
+  reference/ (2 files, 8 lines)
+  changelog.md Changelog (5 lines, 2 sections)
+  notes.md Part one +2 (6 lines, 3 sections)
+
+$ mdpeek docs/ -L 2 -n 2
+docs/ Handbook (9 files, 3 dirs, 37 lines)
+  README.md Handbook (2 lines)
+  guides/ Guides (4 files, 1 dir, 16 lines)
+    README.md Guides (2 lines)
+    advanced/ (1 file, 2 lines)
+    … 2 more (2 files, 12 lines)
+  … 3 more (1 dir, 2 files, 19 lines)
+```
+
+| Command | Shows |
+|---|---|
+| `mdpeek DIR` | the directory's entries; subdirectories collapsed to totals |
+| `mdpeek DIR -L N` | N directory levels expanded |
+| `mdpeek DIR -n N` | the first N entries of each directory, then a `… K more` line |
+| `--include GLOB` | list these files instead of `*.md` and `*.markdown`; repeatable |
+| `--exclude GLOB` | skip matching files and directories; repeatable |
+
+- **Titles:** a file is labelled with its only top-level heading, or the
+  first of several with `+N` for the rest. A directory takes its title from
+  its `README.md` (or `index.md`), which is listed first.
+- **Totals:** directories count every file, subdirectory and line below
+  them, so the bulk of a large library is visible before you open it.
+  A file's `sections` don't count its title.
+- **Order:** the README, then subdirectories, then files, alphabetically.
+- **Skipped:** hidden entries, `node_modules`, `__pycache__`, symlinked
+  directories, and directories with no matching files.
+- **Globs** match an entry's name or its path relative to the directory,
+  gitignore-style: `*` stays within one directory and `**` crosses them
+  (`guides/**/*.md`).
+
 ## Tables
 
 Large tables cost a lot of context, so document output replaces them with a
@@ -223,6 +268,11 @@ table = doc.table("T4")     # Table(headers, rows, sql_names, types, ...)
 table.to_records()          # [{"region": "north", "revenue": 1200.5, ...}, ...]
 result = doc.query("select region from t4 where growth > 0.1")  # Engine.AUTO
 result.columns, result.rows, result.engine
+
+from mdpeek import Library
+
+library = Library.from_path("docs/", exclude=["drafts"])
+print(library.tree(levels=2, first=10))
 ```
 
 ## License

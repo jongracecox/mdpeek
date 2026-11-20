@@ -40,6 +40,7 @@ src/mdpeek/
 ├── engines.py       # SQL over tables: sqlite, optional duckdb
 ├── fences.py        # every fenced block: --fence / --fences
 ├── formats.py       # md / csv / tsv / json / jsonl output
+├── library.py       # directory of markdown files as a tree
 ├── model.py         # Section / Document tree and ID lookup
 ├── options.py       # StrEnum API options and coerce()
 ├── parse.py         # markdown -> section tree and tables (markdown-it)
@@ -51,6 +52,7 @@ tests/
 ├── features/           # Gherkin specs of CLI behaviour
 ├── step_defs/          # shared pytest-bdd steps for the features
 ├── fixtures/small/     # one edge case per file (bytes kept exact, see .gitattributes)
+├── fixtures/library/   # a small synthetic docs directory
 ├── test_parse.py       # expected trees per fixture
 ├── test_render.py      # render API
 └── test_invariants.py  # structural invariants across all fixtures
