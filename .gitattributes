@@ -1,0 +1,2 @@
+# Fixtures must keep their exact bytes (e.g. CRLF line endings).
+tests/fixtures/** -text
