@@ -6,8 +6,8 @@ Feature: Directories
   Background:
     Given the fixture directory "library" as "docs"
 
-  Scenario: The top level by default
-    When I run "mdpeek docs"
+  Scenario: One level of the tree
+    When I run "mdpeek docs -L 1"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 lines)
@@ -70,7 +70,7 @@ Feature: Directories
       ## Added
       ## Fixed
       """
-    When I run "mdpeek notes"
+    When I run "mdpeek notes -L 1"
     Then the output is:
       """
       notes/ (1 file, 5 lines)
@@ -413,3 +413,105 @@ Feature: Directories
       | --fence orders.md#F1 --fence billing.md#F1 --format json  | --format json takes fenced blocks from one file at a time           |
       | --diagrams                                                | --diagrams only applies to a file                                   |
       | -s orders.md --fences                                     | --fences cannot be combined with -s, --table, --diagram or --fence  |
+
+  Scenario: By default the tree expands as far as fits the budget
+    When I run "mdpeek docs"
+    Then the output is:
+      """
+      docs/ Handbook (9 files, 3 dirs, 37 lines)
+        README.md Handbook (2 lines)
+        guides/ Guides (4 files, 1 dir, 16 lines)
+          README.md Guides (2 lines)
+          advanced/ (1 file, 2 lines)
+            tuning.md Tuning (2 lines)
+          deploy.md Deploy (7 lines, 1 table)
+          install.md Install (5 lines, 2 sections)
+            [S1.1] Linux (1)
+            [S1.2] macOS (1)
+        reference/ (2 files, 8 lines)
+          api.md API (6 lines, 3 sections)
+            [S1.1] List (0)
+            [S1.2] Create (0)
+            [S1.3] Delete (0)
+          glossary.md (2 lines)
+        changelog.md Changelog (5 lines, 2 sections)
+          [S1.1] 1.1 (1)
+          [S1.2] 1.0 (1)
+        notes.md Part one +2 (6 lines, 3 sections)
+          [S1] Part one (1)
+          [S2] Part two (1)
+          [S3] Part three (1)
+      """
+
+  Scenario: The budget expands directory levels before headings
+    When I run "mdpeek docs --budget 13"
+    Then the output is:
+      """
+      docs/ Handbook (9 files, 3 dirs, 37 lines)
+        README.md Handbook (2 lines)
+        guides/ Guides (4 files, 1 dir, 16 lines)
+          README.md Guides (2 lines)
+          advanced/ (1 file, 2 lines)
+            tuning.md Tuning (2 lines)
+          deploy.md Deploy (7 lines, 1 table)
+          install.md Install (5 lines, 2 sections)
+        reference/ (2 files, 8 lines)
+          api.md API (6 lines, 3 sections)
+          glossary.md (2 lines)
+        changelog.md Changelog (5 lines, 2 sections)
+        notes.md Part one +2 (6 lines, 3 sections)
+      """
+    And stderr contains:
+      """
+      mdpeek: tree: showing -L 3 to fit --budget 13; -d 1 is 23 lines
+      """
+
+  Scenario: A small budget limits the entries shown
+    When I run "mdpeek docs --budget 4"
+    Then the output is:
+      """
+      docs/ Handbook (9 files, 3 dirs, 37 lines)
+        README.md Handbook (2 lines)
+        guides/ Guides (4 files, 1 dir, 16 lines)
+        … 3 more (1 dir, 2 files, 19 lines)
+      """
+    And stderr contains:
+      """
+      mdpeek: tree: showing -L 1 -n 2 to fit --budget 4; -L 2 is 7 lines
+      """
+
+  Scenario: Options given with a budget stay fixed
+    When I run "mdpeek docs --budget 5 -d 1"
+    Then the output is:
+      """
+      docs/ Handbook (9 files, 3 dirs, 37 lines)
+        README.md Handbook (2 lines)
+        guides/ Guides (4 files, 1 dir, 16 lines)
+        reference/ (2 files, 8 lines)
+        … 2 more (2 files, 11 lines)
+      """
+    And stderr contains:
+      """
+      mdpeek: tree: showing -L 1 -d 1 -n 3 to fit --budget 5; -L 2 is 14 lines
+      """
+
+  Scenario: When nothing fits, the smallest tree is shown
+    When I run "mdpeek docs --budget 2"
+    Then the output is:
+      """
+      docs/ Handbook (9 files, 3 dirs, 37 lines)
+        README.md Handbook (2 lines)
+        … 4 more (2 dirs, 2 files, 35 lines)
+      """
+    And stderr contains:
+      """
+      mdpeek: tree: -L 1 -n 1 is 3 lines, the smallest tree, over --budget 2
+      """
+
+  Scenario: The budget only applies to the tree
+    When I run "mdpeek docs -s notes.md --budget 50"
+    Then the exit code is 2
+    And stderr contains:
+      """
+      mdpeek: --budget cannot be combined with -s, --table, --diagram or --fence on a directory
+      """

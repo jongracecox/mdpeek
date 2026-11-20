@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from functools import cache, cached_property
 from pathlib import Path
@@ -37,6 +37,8 @@ from mdpeek.model import Document, Section
 
 INDENT = "  "
 DEFAULT_LEVELS = 1
+DEFAULT_BUDGET = 150
+"""Lines a directory tree aims to fit when no -L, -d or -n is given."""
 MARKDOWN_SUFFIXES = (".md", ".markdown")
 SKIPPED_NAMES = frozenset({"node_modules", "__pycache__"})
 INDEX_STEMS = ("readme", "index")
@@ -202,6 +204,80 @@ class Library:
         _render_entries(self.root, 1, _TreeOptions(levels, first, depth or 0), out)
         return "".join(f"{line}\n" for line in out)
 
+    def fit(
+        self,
+        budget: int = DEFAULT_BUDGET,
+        levels: int | None = None,
+        depth: int | None = None,
+        first: int | None = None,
+    ) -> TreeFit:
+        """The most detailed tree settings whose output fits ``budget`` lines.
+
+        Directory levels are expanded first; heading depth is added only once
+        every directory is shown (or ``levels`` is given). If even the first
+        level does not fit, ``first`` is set to the largest N that does. Any
+        of ``levels``, ``depth`` and ``first`` that is given stays fixed.
+        When nothing fits, the smallest tree is chosen.
+        """
+        if budget < 1:
+            raise ValueError(f"budget must be at least 1, got {budget}")
+        sizes: dict[tuple[int, int, int | None], int] = {}
+
+        def size(lv: int, dp: int, n: int | None) -> int:
+            key = (lv, dp, n)
+            if key not in sizes:
+                sizes[key] = self.tree(levels=lv, depth=dp or None, first=n).count("\n")
+            return sizes[key]
+
+        lv, dp, n = levels or 1, depth or 0, first
+        if first is None and size(lv, dp, None) > budget:
+            n = self._largest_first(lambda k: size(lv, dp, k) <= budget)
+        if size(lv, dp, n) > budget:
+            return TreeFit(lv, dp, n, size(lv, dp, n))  # nothing fits: the smallest tree
+
+        def stopped(flag: str, lines: int) -> TreeFit:
+            return TreeFit(lv, dp, n, size(lv, dp, n), flag, lines)
+
+        if levels is None:
+            while lv < _dir_height(self.root):
+                if size(lv + 1, dp, n) > budget:
+                    return stopped(f"-L {lv + 1}", size(lv + 1, dp, n))
+                lv += 1
+        if depth is None:
+            max_depth = max(
+                (_heading_height(heading_roots(f.doc)) for f in self._files()), default=0
+            )
+            while dp < max_depth:
+                if size(lv, dp + 1, n) > budget:
+                    return stopped(f"-d {dp + 1}", size(lv, dp + 1, n))
+                dp += 1
+        if n is not None and first is None:
+            return stopped(f"-n {n + 1}", size(lv, dp, n + 1))
+        return TreeFit(lv, dp, n, size(lv, dp, n))
+
+    def _files(self) -> list[FileNode]:
+        found: list[FileNode] = []
+        pending = [self.root]
+        while pending:
+            node = pending.pop()
+            found.extend(node.files)
+            pending.extend(node.dirs)
+        return found
+
+    def _largest_first(self, fits: Callable[[int], bool]) -> int:
+        """The largest N for ``first`` that ``fits``, or 1 if none does."""
+        lo, hi = 1, max(self.root.file_count + self.root.dir_count, 1)
+        hi += sum(sum(1 for s in f.doc.walk() if not s.is_preamble) for f in self._files())
+        if not fits(lo):
+            return 1
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if fits(mid):
+                lo = mid
+            else:
+                hi = mid - 1
+        return lo
+
 
 _ID_SUFFIX = re.compile(r"[SsTtDdFf]\d+(?:\.\d+)*")
 
@@ -262,6 +338,31 @@ def _missing_file(root: Path, normal: str) -> str:
         if nearby:
             message += f"; nearby: {', '.join(nearby[:5])}"
     return message
+
+
+@dataclass(frozen=True)
+class TreeFit:
+    """The tree settings :meth:`Library.fit` chose for a line budget."""
+
+    levels: int
+    depth: int
+    """Heading depth; 0 lists no headings."""
+    first: int | None
+    lines: int
+    """Lines the tree takes with these settings."""
+    next_step: str | None = None
+    """The next expansion, as CLI flags, if it did not fit (e.g. ``-L 3``)."""
+    next_lines: int | None = None
+    """Lines the tree would take with ``next_step``."""
+
+    def flags(self) -> str:
+        """These settings as CLI flags, e.g. ``-L 2 -d 1``."""
+        parts = [f"-L {self.levels}"]
+        if self.depth:
+            parts.append(f"-d {self.depth}")
+        if self.first is not None:
+            parts.append(f"-n {self.first}")
+        return " ".join(parts)
 
 
 @dataclass(frozen=True)
@@ -427,6 +528,15 @@ def _render_entries(node: DirNode, indent_level: int, opts: _TreeOptions, out: l
             details.append(_plural(len(files), "file"))
         details.append(_plural(sum(e.line_count for e in hidden), "line"))
         out.append(f"{indent}… {len(hidden)} more ({', '.join(details)})")
+
+
+def _dir_height(node: DirNode) -> int:
+    """The ``levels`` needed to expand every directory under ``node``."""
+    return 1 + max((_dir_height(d) for d in node.dirs), default=0)
+
+
+def _heading_height(sections: list[Section]) -> int:
+    return max((1 + _heading_height(s.children) for s in sections), default=0)
 
 
 def heading_roots(doc: Document) -> list[Section]:

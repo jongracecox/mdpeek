@@ -16,7 +16,7 @@ from mdpeek.diagrams import DiagramNotFound
 from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
 from mdpeek.fences import FenceNotFound, render_fence_list, render_fences
 from mdpeek.formats import format_rows, to_json
-from mdpeek.library import Library, resolve_ref
+from mdpeek.library import DEFAULT_BUDGET, Library, resolve_ref
 from mdpeek.model import Document, SectionNotFound
 from mdpeek.options import Engine, Format, Mode, OnTableError
 from mdpeek.render import render
@@ -146,6 +146,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=_positive_int,
         metavar="N",
         help="show only the first N entries of each directory",
+    )
+    directories.add_argument(
+        "--budget",
+        type=_positive_int,
+        metavar="LINES",
+        help="expand the tree as far as fits in this many lines; used by default "
+        f"({DEFAULT_BUDGET}) unless -L, -d or -n is given, which it otherwise keeps fixed",
     )
     directories.add_argument(
         "--include",
@@ -327,7 +334,7 @@ def _load(args: argparse.Namespace) -> tuple[str, SourceInfo]:
     )
 
 
-_TREE_FLAGS = ("levels", "first", "include", "exclude")
+_TREE_FLAGS = ("levels", "first", "budget", "include", "exclude")
 _FILE_FLAGS = ("rows", "cols", "limit", "format", "engine", "sql")
 
 
@@ -358,7 +365,25 @@ def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
     library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
     for skipped in library.skipped:
         print(f"mdpeek: skipped {skipped}", file=sys.stderr)
-    return library.tree(levels=args.levels, first=args.first, depth=args.depth)
+    pinned = (args.levels, args.depth, args.first)
+    if args.budget is None and any(v is not None for v in pinned):
+        return library.tree(levels=args.levels, first=args.first, depth=args.depth)
+
+    budget = args.budget or DEFAULT_BUDGET
+    fit = library.fit(budget, levels=args.levels, depth=args.depth, first=args.first)
+    if fit.lines > budget:
+        print(
+            f"mdpeek: tree: {fit.flags()} is {fit.lines} lines, the smallest tree, "
+            f"over --budget {budget}",
+            file=sys.stderr,
+        )
+    elif fit.next_step:
+        print(
+            f"mdpeek: tree: showing {fit.flags()} to fit --budget {budget}; "
+            f"{fit.next_step} is {fit.next_lines} lines",
+            file=sys.stderr,
+        )
+    return library.tree(levels=fit.levels, first=fit.first, depth=fit.depth or None)
 
 
 def _fetch_from_directory(args: argparse.Namespace, settings: TableSettings) -> str:
