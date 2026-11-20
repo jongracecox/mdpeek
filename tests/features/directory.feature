@@ -307,5 +307,109 @@ Feature: Directories
       | --table guides/deploy.md#T7                                     | guides/deploy.md: no table 'T7'                                           |
       | -s ../outside.md                                                | '../outside.md' is outside the directory                                  |
       | --table guides/deploy.md                                        | --table needs PATH#ID on a directory, got 'guides/deploy.md'              |
-      | -s notes.md -L 2                                                | --levels cannot be combined with -s or --table on a directory             |
+      | -s notes.md -L 2                                                | --levels cannot be combined with -s, --table, --diagram or --fence on a directory |
       | --table guides/deploy.md#T1 --table notes.md#T1 --format csv    | --format csv takes tables from one file at a time                         |
+
+  Scenario: The tree counts diagrams
+    Given a markdown file "flows/orders.md" containing:
+      """
+      # Orders
+      ## Flow
+      ```mermaid
+      flowchart LR
+          A --> B
+      ```
+      ## Setup
+      ```sh
+      make run
+      ```
+      """
+    When I run "mdpeek flows -d 1"
+    Then the output is:
+      """
+      flows/ (1 file, 10 lines)
+        orders.md Orders (10 lines, 2 sections, 1 diagram)
+          [S1.1] Flow (4, 1 diagram)
+          [S1.2] Setup (3)
+      """
+
+  Scenario: One diagram or fenced block from a directory prints its bare source
+    Given a markdown file "flows/orders.md" containing:
+      """
+      # Orders
+      ```mermaid
+      flowchart LR
+          A --> B
+      ```
+      ```sh
+      make run
+      ```
+      """
+    When I run "mdpeek flows --fence orders.md#F2"
+    Then the output is:
+      """
+      make run
+      """
+
+  Scenario: Diagrams from several files are each labelled and fenced
+    Given a markdown file "flows/orders.md" containing:
+      """
+      # Orders
+      ```mermaid
+      flowchart LR
+          A --> B
+      ```
+      """
+    And a markdown file "flows/billing.md" containing:
+      """
+      # Billing
+      ```dot
+      digraph G { a -> b }
+      ```
+      """
+    When I run "mdpeek flows --diagram orders.md#D1 --diagram billing.md#d1"
+    Then the output is:
+      """
+      ==> orders.md <==
+      [D1] S1 mermaid flowchart (2 lines)
+      ```mermaid
+      flowchart LR
+          A --> B
+      ```
+
+      ==> billing.md <==
+      [D1] S1 graphviz digraph (1 line)
+      ```dot
+      digraph G { a -> b }
+      ```
+      """
+
+  Scenario Outline: Bad diagram and fence references on a directory
+    Given a markdown file "flows/orders.md" containing:
+      """
+      # Orders
+      ```mermaid
+      flowchart LR
+      ```
+      """
+    And a markdown file "flows/billing.md" containing:
+      """
+      # Billing
+      ```sh
+      make bill
+      ```
+      """
+    When I run "mdpeek flows <args>"
+    Then the exit code is 2
+    And stderr contains:
+      """
+      mdpeek: <message>
+      """
+
+    Examples:
+      | args                                                      | message                                                             |
+      | --diagram orders.md#D9                                    | orders.md: no diagram 'D9'; available: D1                           |
+      | --fence orders.md                                         | --fence needs PATH#ID on a directory, got 'orders.md'               |
+      | --fence orders.md#F1 --fence billing.md#F1 --format json  | --format json takes fenced blocks from one file at a time           |
+      | --diagrams                                                | --diagrams only applies to a file                                   |
+      | -s orders.md --fences                                     | --fences cannot be combined with -s, --table, --diagram or --fence  |

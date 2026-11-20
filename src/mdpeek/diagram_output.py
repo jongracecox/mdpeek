@@ -10,15 +10,19 @@ from mdpeek.formats import to_json
 from mdpeek.options import Format, coerce
 
 
-def render_diagrams(diagrams: Sequence[Diagram], fmt: Format | str) -> str:
+def render_diagrams(
+    diagrams: Sequence[Diagram], fmt: Format | str, *, label_single: bool = False
+) -> str:
     """Diagram source for md, or JSON with the source.
 
     A single diagram prints its bare source, ready to pipe into a renderer:
     whoever asked for it by ID has already seen its summary. Several diagrams
     each get their summary line and fences, so the boundaries are clear.
+    ``label_single`` labels and fences a single diagram too, for callers
+    that show it alongside others.
     """
     fmt = coerce(Format, fmt)
-    if fmt is Format.MD and len(diagrams) == 1:
+    if fmt is Format.MD and len(diagrams) == 1 and not label_single:
         return diagrams[0].source
     if fmt is Format.JSON:
         objects = [_describe(d, source=True) for d in diagrams]
