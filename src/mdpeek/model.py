@@ -15,6 +15,7 @@ from mdpeek.options import Engine, Mode
 
 if TYPE_CHECKING:
     from mdpeek.cache import Cache
+    from mdpeek.diagrams import Diagram
     from mdpeek.engines import QueryResult
     from mdpeek.options import CacheBackend
     from mdpeek.source import SourceInfo
@@ -90,6 +91,8 @@ class Document:
     """Top-level sections in order, starting with ``S0`` when there is a preamble."""
     tables: list[Table] = field(default_factory=list)
     """Top-level GFM tables in document order (``T1..Tn``)."""
+    diagrams: list[Diagram] = field(default_factory=list)
+    """Top-level mermaid/PlantUML/Graphviz/D2 fences in document order (``D1..Dn``)."""
     source: SourceInfo | None = None
     """Where the text came from (path, URL, stdin), and whether it was cached."""
 
@@ -151,11 +154,12 @@ class Document:
         depth: int | None = None,
         sections: Iterable[str] | None = None,
         tables: TableSettings | None = None,
+        diagram_summaries: bool = True,
     ) -> str:
         """Content down to ``depth`` (default 1), with stubs for the next level."""
         from mdpeek.render import render
 
-        return render(self, Mode.VIEW, depth, sections, tables)
+        return render(self, Mode.VIEW, depth, sections, tables, diagram_summaries)
 
     def structure(self, depth: int | None = None, sections: Iterable[str] | None = None) -> str:
         """Heading outline with line counts, down to ``depth`` (default: all)."""
@@ -168,11 +172,12 @@ class Document:
         depth: int | None = None,
         sections: Iterable[str] | None = None,
         tables: TableSettings | None = None,
+        diagram_summaries: bool = True,
     ) -> str:
         """All content down to ``depth`` (default: all)."""
         from mdpeek.render import render
 
-        return render(self, Mode.FULL, depth, sections, tables)
+        return render(self, Mode.FULL, depth, sections, tables, diagram_summaries)
 
     def table(self, table_id: str) -> Table:
         """Return the table with ``table_id`` (case-insensitive)."""
@@ -197,6 +202,23 @@ class Document:
         from mdpeek.engines import run_query
 
         return run_query(self.tables_in(sections), sql, engine)
+
+    def diagram(self, diagram_id: str) -> Diagram:
+        """Return the diagram with ``diagram_id`` (case-insensitive)."""
+        from mdpeek.diagrams import DiagramNotFound
+
+        wanted = diagram_id.strip().upper()
+        for diagram in self.diagrams:
+            if diagram.id == wanted:
+                return diagram
+        raise DiagramNotFound(diagram_id, [d.id for d in self.diagrams])
+
+    def diagrams_in(self, section_ids: Iterable[str] | None = None) -> list[Diagram]:
+        """Diagrams in the given sections' subtrees, or all diagrams if ``None``."""
+        if section_ids is None:
+            return list(self.diagrams)
+        scope = {s.id for section_id in section_ids for s in self.get(section_id).walk()}
+        return [d for d in self.diagrams if d.section_id in scope]
 
     def tables_in(self, section_ids: Iterable[str] | None = None) -> list[Table]:
         """Tables in the given sections' subtrees, or all tables if ``None``."""

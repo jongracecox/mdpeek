@@ -64,3 +64,13 @@ name = "sensor-calibration"
 question = "What is the channel 9 calibration offset for sensor S-14?"
 steps = [["--tables"], ["--table", "T4", "--rows", "14", "--cols", "sensor,ch_09"]]
 expect = "| S-14 | 0.137 |"
+
+[[scenario]]
+name = "dispatch-flow"
+question = "What happens when a beacon doesn't confirm a dispatch?"
+steps = [
+  ["--structure", "-d", "2"],
+  ["--diagrams", "-s", "S3"],
+  ["--diagram", "D1"],
+]
+expect = "B -- no --> E[Escalate to shift lead]"

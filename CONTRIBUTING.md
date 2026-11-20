@@ -35,6 +35,8 @@ src/mdpeek/
 ├── __main__.py   # python -m mdpeek
 ├── cache.py         # memory / disk caches for fetched URLs
 ├── cli.py           # argparse entry point
+├── diagram_output.py  # --diagram / --diagrams output
+├── diagrams.py      # mermaid / PlantUML / Graphviz / D2 fences
 ├── engines.py       # SQL over tables: sqlite, optional duckdb
 ├── formats.py       # md / csv / tsv / json / jsonl output
 ├── model.py         # Section / Document tree and ID lookup

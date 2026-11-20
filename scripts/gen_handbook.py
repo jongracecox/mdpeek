@@ -8,7 +8,8 @@ It deliberately contains everything mdpeek must cope with: front matter, a
 preamble, headings six levels deep, duplicate and self-numbered titles, '/'
 in titles, setext headings, fenced code with '#' lines, HTML blocks, nested
 lists, blockquotes, footnote-style text, small inline tables, a wide table
-(24 columns), a deep table (320 rows) and a ragged table. It also plants
+(24 columns), a deep table (320 rows), a ragged table, and mermaid, Graphviz
+and PlantUML diagrams. It also plants
 specific facts that the efficiency eval (evals/scenarios.toml) asks about.
 
     uv run python scripts/gen_handbook.py            # rewrite the fixture
@@ -254,14 +255,66 @@ def getting_started(w: Writer) -> None:
     w.bullets(4, nested=True)
 
 
+DISPATCH_FLOW = """\
+```mermaid
+---
+title: Dispatch flow
+---
+flowchart TD
+    M[Manifest received] --> V{Valid?}
+    V -- no --> R[Return to sender]
+    V -- yes --> A[Approved]
+    A --> D[Dispatch to depot]
+    D --> B{Beacon confirms?}
+    B -- yes --> L[Write to ledger]
+    B -- no --> E[Escalate to shift lead]
+    E --> D
+
+    classDef ok fill:#4c1,color:#000
+    classDef bad fill:#e05d44,color:#fff
+    class L ok
+    class R,E bad
+```"""
+
+LEDGER_GRAPH = """\
+```dot
+digraph ledger {
+    rankdir=LR;
+    relay -> ledger [label="append"];
+    ledger -> archive [label="after 90 days"];
+    ledger -> audit [label="nightly"];
+}
+```"""
+
+AUTH_SEQUENCE = """\
+```plantuml
+@startuml
+title Token exchange
+Client -> Gateway: POST /auth (API key)
+Gateway -> Keystore: verify key
+Keystore --> Gateway: ok
+Gateway --> Client: session token (1 h)
+@enduml
+```"""
+
+
+def diagram(w: Writer, source: str) -> None:
+    w.blank()
+    w.add(*source.splitlines())
+    w.blank()
+
+
 def architecture(w: Writer) -> None:
     w.heading(1, "Architecture / Design")
     w.paragraph()
     w.heading(2, "Overview")
     w.paragraphs()
+    diagram(w, DISPATCH_FLOW)
     for name in ["Beacons", "Relays", "Ledger"]:
         w.heading(2, name)
         w.paragraphs((2, 4))
+        if name == "Ledger":
+            diagram(w, LEDGER_GRAPH)
         for sub in ["Lifecycle", "Failure modes"]:
             w.heading(3, sub)
             w.paragraphs()
@@ -413,6 +466,7 @@ def api_reference(w: Writer) -> None:
     w.paragraph()
     w.heading(2, "Overview")
     w.paragraphs()
+    diagram(w, AUTH_SEQUENCE)
     w.heading(2, "Endpoints")
     for resource in ["Depots", "Manifests", "Beacons"]:
         w.heading(3, resource)

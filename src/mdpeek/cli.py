@@ -8,6 +8,8 @@ from collections.abc import Sequence
 
 from mdpeek import __version__
 from mdpeek.cache import DEFAULT_TTL, CacheBackend
+from mdpeek.diagram_output import render_diagram_list, render_diagrams
+from mdpeek.diagrams import DiagramNotFound
 from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
 from mdpeek.formats import format_rows, to_json
 from mdpeek.model import Document, SectionNotFound
@@ -108,6 +110,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="list every table (in --section scope); with --full/--rows/--cols, show each",
     )
     targets.add_argument(
+        "--diagram",
+        action="append",
+        metavar="ID",
+        help="print a diagram's source (e.g. D1); repeatable",
+    )
+    targets.add_argument(
+        "--diagrams",
+        action="store_true",
+        help="list every diagram (in --section scope); with --full, show each",
+    )
+    targets.add_argument(
         "--sql",
         metavar="QUERY",
         help="run SQL over the tables (in --section scope), loaded as t1, t2, ...",
@@ -156,6 +169,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="list column names in a summary only if they fit in N characters "
         f"(default {defaults.header_max_chars})",
+    )
+    tables.add_argument(
+        "--diagram-summaries",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="replace diagrams with a one-line summary in document output",
     )
     tables.add_argument(
         "--raw-column-names",
@@ -231,22 +250,42 @@ def _load(args: argparse.Namespace) -> tuple[str, SourceInfo]:
 def _check_combinations(args: argparse.Namespace) -> None:
     if args.engine is not None and args.sql is None:
         raise UsageError("--engine only applies with --sql")
+    diagram_mode = bool(args.diagram or args.diagrams)
+    data_mode = bool(args.table or args.tables or args.sql is not None)
+    slicing = [f"--{f}" for f in ("rows", "cols", "limit") if getattr(args, f) is not None]
     if args.sql is not None:
-        used = [f"--{flag}" for flag in ("rows", "cols") if getattr(args, flag) is not None]
+        used = [flag for flag in slicing if flag != "--limit"]
         if used:
             raise UsageError(f"{', '.join(used)} cannot be combined with --sql")
-    table_mode = bool(args.table or args.tables or args.sql is not None)
-    if not table_mode:
-        used = [f"--{flag}" for flag in _DATA_FLAGS if getattr(args, flag) is not None]
-        if used:
-            raise UsageError(f"{_flags(used)} only {_verb(used)} with --table, --tables or --sql")
+    if slicing and not data_mode:
+        raise UsageError(f"{_flags(slicing)} only {_verb(slicing)} with --table, --tables or --sql")
+    targets = "--table, --tables, --sql, --diagram or --diagrams"
+    if not (data_mode or diagram_mode):
+        if args.format is not None:
+            raise UsageError(f"--format only applies with {targets}")
         return
     if args.mode is Mode.STRUCTURE:
-        raise UsageError("--structure cannot be combined with --table, --tables or --sql")
+        raise UsageError(f"--structure cannot be combined with {targets}")
     if args.depth is not None:
-        raise UsageError("--depth cannot be combined with --table, --tables or --sql")
-    if args.table and args.section:
-        raise UsageError("--section cannot be combined with --table (table IDs are global)")
+        raise UsageError(f"--depth cannot be combined with {targets}")
+    if (args.table or args.diagram) and args.section:
+        raise UsageError(
+            "--section cannot be combined with --table or --diagram (their IDs are global)"
+        )
+    if diagram_mode and args.format in (Format.CSV.value, Format.TSV.value):
+        raise UsageError(
+            f"--format {args.format} does not apply to diagrams; use md, json or jsonl"
+        )
+
+
+def _show_diagrams(doc: Document, args: argparse.Namespace) -> str:
+    fmt = Format(args.format or Format.MD)
+    if args.diagram:
+        return render_diagrams([doc.diagram(d) for d in args.diagram], fmt)
+    found = doc.diagrams_in(args.section)
+    if args.mode is Mode.FULL:
+        return render_diagrams(found, fmt)
+    return render_diagram_list(found, fmt)
 
 
 def _show_tables(doc: Document, args: argparse.Namespace, settings: TableSettings) -> str:
@@ -332,12 +371,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = _run_sql(doc, args)
         elif args.table or args.tables:
             output = _show_tables(doc, args, settings)
+        elif args.diagram or args.diagrams:
+            output = _show_diagrams(doc, args)
         else:
-            output = render(doc, args.mode, args.depth, args.section, settings)
+            output = render(
+                doc, args.mode, args.depth, args.section, settings, args.diagram_summaries
+            )
     except (
         UsageError,
         SectionNotFound,
         TableNotFound,
+        DiagramNotFound,
         SelectionError,
         QueryError,
         EngineUnavailable,
