@@ -55,5 +55,12 @@ Feature: Output formats for table data
     When I run "mdpeek doc.md --tables --format jsonl"
     Then the output is:
       """
-      {"id":"T1","section":"S0","cols":2,"rows":2,"columns":["Name","Score"],"names":["name","score"],"types":["TEXT","INTEGER"],"warnings":[],"error":null}
+      {"id":"T1","section":"S0","cols":2,"rows":2,"columns":["name","score"],"names":["name","score"],"types":["TEXT","INTEGER"],"warnings":[],"error":null}
+      """
+
+  Scenario: Table list as JSON with original headers
+    When I run "mdpeek doc.md --tables --format jsonl --raw-column-names"
+    Then the output contains:
+      """
+      "columns":["Name","Score"],"names":["name","score"]
       """
