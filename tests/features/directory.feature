@@ -515,3 +515,79 @@ Feature: Directories
       """
       mdpeek: --budget cannot be combined with -s, --table, --diagram or --fence on a directory
       """
+
+  Scenario: Grep across a directory groups sections by file, most matches first
+    When I run "mdpeek docs --grep 'run|first'"
+    Then the output is:
+      """
+      docs/ (4 matches in 3 files)
+        guides/install.md Install (2 matches)
+          [S1.1] Linux (1 match)
+          [S1.2] macOS (1 match)
+        changelog.md Changelog (1 match)
+          [S1.2] 1.0 (1 match)
+        notes.md Part one +2 (1 match)
+          [S1] Part one (1 match)
+      """
+
+  Scenario: First limits the files and the sections in each
+    When I run "mdpeek docs --grep 'run|first' -n 1"
+    Then the output is:
+      """
+      docs/ (4 matches in 3 files)
+        guides/install.md Install (2 matches)
+          [S1.1] Linux (1 match)
+          … 1 more (1 section, 1 match)
+        … 2 more (2 files, 2 matches)
+      """
+
+  Scenario: Grep results fit the budget
+    When I run "mdpeek docs --grep 'run|first' --budget 6"
+    Then the output is:
+      """
+      docs/ (4 matches in 3 files)
+        guides/install.md Install (2 matches)
+          [S1.1] Linux (1 match)
+          … 1 more (1 section, 1 match)
+        … 2 more (2 files, 2 matches)
+      """
+    And stderr contains:
+      """
+      mdpeek: grep: showing -n 1 to fit --budget 6 (first N files, first N sections in each)
+      """
+
+  Scenario: Grep with no matches in a directory
+    When I run "mdpeek docs --grep nothing-here"
+    Then the output is:
+      """
+      docs/ (0 matches)
+      """
+    And stderr contains:
+      """
+      mdpeek: grep: no matches for 'nothing-here'
+      """
+
+  Scenario: Grep searches only the included files
+    When I run "mdpeek docs --grep 'run|first' --exclude guides"
+    Then the output is:
+      """
+      docs/ (2 matches in 2 files)
+        changelog.md Changelog (1 match)
+          [S1.2] 1.0 (1 match)
+        notes.md Part one +2 (1 match)
+          [S1] Part one (1 match)
+      """
+
+  Scenario Outline: Grep options on a directory
+    When I run "mdpeek docs --grep run <args>"
+    Then the exit code is 2
+    And stderr contains:
+      """
+      mdpeek: <message>
+      """
+
+    Examples:
+      | args               | message                                  |
+      | -L 2               | --levels cannot be combined with --grep  |
+      | -d 1               | --depth cannot be combined with --grep   |
+      | -s notes.md        | --section cannot be combined with --grep |

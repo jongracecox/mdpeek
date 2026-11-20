@@ -20,6 +20,7 @@ from mdpeek.library import DEFAULT_BUDGET, Library, resolve_ref
 from mdpeek.model import Document, SectionNotFound
 from mdpeek.options import Engine, Format, Mode, OnTableError
 from mdpeek.render import render
+from mdpeek.search import compile_pattern, render_hits, section_hits
 from mdpeek.source import DEFAULT_TIMEOUT, FetchError, SourceInfo, is_url, load, parse_header
 from mdpeek.table_output import (
     DEFAULT_LIMIT,
@@ -130,6 +131,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="levels to expand, counted from the top or from each --section; "
         "on a directory, heading levels listed under each file",
+    )
+
+    parser.add_argument(
+        "--grep",
+        metavar="PATTERN",
+        help="list the sections with lines matching this regex (case-insensitive unless it "
+        "has a capital); on a directory, grouped by file, most matches first",
     )
 
     directories = parser.add_argument_group("directories")
@@ -351,8 +359,64 @@ _FETCH_KINDS = {"table": "tables", "diagram": "diagrams", "fence": "fenced block
 _LISTS = ("tables", "diagrams", "fences")
 
 
+_GREP_CONFLICTS = (
+    "depth",
+    "table",
+    "sql",
+    "diagram",
+    "fence",
+    "rows",
+    "cols",
+    "limit",
+    "format",
+    "engine",
+)
+
+
+def _check_grep(args: argparse.Namespace, *also: str) -> None:
+    used = _used(args, (*_GREP_CONFLICTS, *also)) + [_flag(n) for n in _LISTS if getattr(args, n)]
+    used += [_flag(args.mode.value)] if args.mode is not Mode.VIEW else []
+    if used:
+        raise UsageError(f"{_flags(used)} cannot be combined with --grep")
+
+
+def _grep_file(doc: Document, args: argparse.Namespace) -> str:
+    _check_grep(args)
+    hits = section_hits(doc, compile_pattern(args.grep), args.section)
+    if not hits:
+        print(f"mdpeek: grep: no matches for {args.grep!r}", file=sys.stderr)
+    return render_hits(hits)
+
+
+def _grep_directory(args: argparse.Namespace) -> str:
+    _check_grep(args, "section", "levels")
+    regex = compile_pattern(args.grep)
+    library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
+    for skipped in library.skipped:
+        print(f"mdpeek: skipped {skipped}", file=sys.stderr)
+    budget = args.budget or (DEFAULT_BUDGET if args.first is None else None)
+    result = library.grep(regex, first=args.first, budget=budget)
+    if not result.files:
+        print(f"mdpeek: grep: no matches for {args.grep!r}", file=sys.stderr)
+    elif budget is not None and result.text.count("\n") > budget:
+        print(
+            f"mdpeek: grep: -n {result.first} is {result.text.count(chr(10))} lines, "
+            f"the smallest, over --budget {budget}",
+            file=sys.stderr,
+        )
+    elif args.first is None and result.first is not None:
+        print(
+            f"mdpeek: grep: showing -n {result.first} to fit --budget {budget} "
+            "(first N files, first N sections in each)",
+            file=sys.stderr,
+        )
+    return result.text
+
+
 def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
     _reject_url_flags(args)
+    if args.grep is not None:
+        return _grep_directory(args)
     if args.section or any(getattr(args, kind) for kind in _FETCH_KINDS):
         return _fetch_from_directory(args, settings)
     used = _used(args, _FILE_FLAGS) + [_flag(n) for n in _LISTS if getattr(args, n)]
@@ -594,8 +658,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     doc.source = info
     try:
         _reject_tree_flags(args)
-        _check_combinations(args)
-        if args.sql is not None:
+        if args.grep is None:
+            _check_combinations(args)
+        if args.grep is not None:
+            output = _grep_file(doc, args)
+        elif args.sql is not None:
             output = _run_sql(doc, args)
         elif args.table or args.tables:
             output = _show_tables(doc, args, settings)

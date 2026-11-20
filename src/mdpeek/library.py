@@ -34,6 +34,7 @@ from functools import cache, cached_property
 from pathlib import Path
 
 from mdpeek.model import Document, Section
+from mdpeek.search import hit_line, matches, section_hits
 
 INDENT = "  "
 DEFAULT_LEVELS = 1
@@ -255,6 +256,55 @@ class Library:
             return stopped(f"-n {n + 1}", size(lv, dp, n + 1))
         return TreeFit(lv, dp, n, size(lv, dp, n))
 
+    def grep(
+        self,
+        regex: re.Pattern[str],
+        first: int | None = None,
+        budget: int | None = None,
+    ) -> GrepResult:
+        """Matching sections, grouped by file, the files with most matches first.
+
+        ``first`` shows the first N files and the first N sections in each,
+        summarising the rest on ``… K more`` lines. With a ``budget`` and no
+        ``first``, ``first`` is set to the largest N whose output fits (or 1).
+        """
+        for name, value in (("first", first), ("budget", budget)):
+            if value is not None and value < 1:
+                raise ValueError(f"{name} must be at least 1, got {value}")
+        found: list[_FileHits] = []
+        for node in self._files():
+            hits = section_hits(node.doc, regex)
+            if hits:
+                rel = node.path.relative_to(self.root.path).as_posix()
+                found.append(_FileHits(rel, node, hits))
+        found.sort(key=lambda f: (-f.count, f.rel))
+
+        lines = self._grep_lines(found, first)
+        if budget is not None and first is None and len(lines) > budget:
+            first = self._largest_first(lambda n: len(self._grep_lines(found, n)) <= budget)
+            lines = self._grep_lines(found, first)
+        text = "".join(f"{line}\n" for line in lines)
+        return GrepResult(text, len(found), sum(f.count for f in found), first)
+
+    def _grep_lines(self, found: list[_FileHits], first: int | None) -> list[str]:
+        total = sum(f.count for f in found)
+        details = [matches(total)] + ([f"in {_plural(len(found), 'file')}"] if found else [])
+        out = [f"{self.display} ({' '.join(details)})"]
+        shown = found if first is None else found[:first]
+        for f in shown:
+            out.append(INDENT + _labelled(f.rel, f.node.title, [matches(f.count)]))
+            hits = f.hits if first is None else f.hits[:first]
+            out += [INDENT * 2 + hit_line(s, n) for s, n in hits]
+            if len(hits) < len(f.hits):
+                out.append(_more(INDENT * 2, f.hits[len(hits) :], "section"))
+        rest = found[len(shown) :]
+        if rest:
+            count = sum(f.count for f in rest)
+            out.append(
+                f"{INDENT}… {len(rest)} more ({_plural(len(rest), 'file')}, {matches(count)})"
+            )
+        return out
+
     def _files(self) -> list[FileNode]:
         found: list[FileNode] = []
         pending = [self.root]
@@ -338,6 +388,30 @@ def _missing_file(root: Path, normal: str) -> str:
         if nearby:
             message += f"; nearby: {', '.join(nearby[:5])}"
     return message
+
+
+@dataclass(frozen=True)
+class GrepResult:
+    """Matching sections across a library, as text."""
+
+    text: str
+    files: int
+    """Files with a match."""
+    total: int
+    """Matching lines in all files."""
+    first: int | None
+    """The ``first`` used: as given, or chosen to fit the budget."""
+
+
+@dataclass(frozen=True)
+class _FileHits:
+    rel: str
+    node: FileNode
+    hits: list[tuple[Section, int]]
+
+    @property
+    def count(self) -> int:
+        return sum(n for _, n in self.hits)
 
 
 @dataclass(frozen=True)
@@ -528,6 +602,11 @@ def _render_entries(node: DirNode, indent_level: int, opts: _TreeOptions, out: l
             details.append(_plural(len(files), "file"))
         details.append(_plural(sum(e.line_count for e in hidden), "line"))
         out.append(f"{indent}… {len(hidden)} more ({', '.join(details)})")
+
+
+def _more(indent: str, hits: list[tuple[Section, int]], word: str) -> str:
+    count = sum(n for _, n in hits)
+    return f"{indent}… {len(hits)} more ({_plural(len(hits), word)}, {matches(count)})"
 
 
 def _dir_height(node: DirNode) -> int:

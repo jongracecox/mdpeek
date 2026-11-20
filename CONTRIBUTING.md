@@ -46,6 +46,7 @@ src/mdpeek/
 ├── options.py       # StrEnum API options and coerce()
 ├── parse.py         # markdown -> section tree and tables (markdown-it)
 ├── render.py        # view / structure / full output
+├── search.py        # --grep: sections with matching lines
 ├── source.py        # load from path, URL (fetch + cache) or stdin
 ├── table_output.py  # --table / --tables selection and formatting
 └── tables.py        # table extraction, typing, summaries
