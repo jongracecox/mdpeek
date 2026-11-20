@@ -57,6 +57,18 @@ def test_sql_names_from_headers(doc):
     assert doc.table("T3").sql_names[:2] == ["col_1", "col_2"]
 
 
+def test_sql_names_convert_accents_to_ascii():
+    doc = Document.from_text("| Café / Bar | Ñame | 日本 |\n|---|---|---|\n| a | b | c |\n")
+    assert doc.tables[0].sql_names == ["cafe_bar", "name", "col_3"]
+
+
+def test_summary_uses_sql_names_unless_raw():
+    doc = Document.from_text("| Item Name | Qty |\n|---|---|\n| a | 1 |\n")
+    table = doc.tables[0]
+    assert summary(table, TableSettings()).endswith(": item_name, qty")
+    assert summary(table, TableSettings(raw_column_names=True)).endswith(": Item Name, Qty")
+
+
 def test_unknown_table_lists_available(doc):
     with pytest.raises(TableNotFound, match="no table 'T9'; available: T1, T2, T3, T4"):
         doc.table("T9")

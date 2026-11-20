@@ -59,14 +59,24 @@ def select(
     return Selection(table, columns, picked[:cap], len(picked))
 
 
-def render_table(selection: Selection, fmt: Format | str, *, schema: bool = True) -> str:
-    """One table's output. A failed table shows its error and raw text."""
+def render_table(
+    selection: Selection,
+    fmt: Format | str,
+    *,
+    schema: bool = True,
+    raw_column_names: bool = False,
+) -> str:
+    """One table's output. A failed table shows its error and raw text.
+
+    Columns are shown by their SQL names unless ``raw_column_names``.
+    """
     fmt = coerce(Format, fmt)
     table = selection.table
     if not table.ok:
         return _failed(table, fmt)
 
-    headers = [table.headers[i] for i in selection.columns]
+    shown = table.display_headers(raw_column_names)
+    headers = [shown[i] for i in selection.columns]
     if fmt in (Format.JSON, Format.JSONL):
         names = [table.sql_names[i] for i in selection.columns]
         typed = table.typed_rows()
@@ -81,7 +91,8 @@ def render_table(selection: Selection, fmt: Format | str, *, schema: bool = True
         return data
     lines = [summary(table, _NO_HEADER_NAMES, with_section=True)]
     if schema:
-        lines.append("columns: " + ", ".join(_column_spec(table, i) for i in selection.columns))
+        specs = (_column_spec(table, i, raw_column_names) for i in selection.columns)
+        lines.append("columns: " + ", ".join(specs))
     return "\n".join(lines) + "\n" + data
 
 
@@ -106,10 +117,12 @@ def render_table_list(tables: Sequence[Table], settings: TableSettings, fmt: For
     return "".join(summary(t, settings, with_section=True) + "\n" for t in tables)
 
 
-def _column_spec(table: Table, index: int) -> str:
+def _column_spec(table: Table, index: int, raw_column_names: bool) -> str:
     name, header = table.sql_names[index], table.headers[index]
     spec = f"{name} {table.types[index]}"
-    return spec if header.strip().lower() == name else f'{spec} ("{header}")'
+    if not raw_column_names or header.strip().lower() == name:
+        return spec
+    return f'{spec} ("{header}")'
 
 
 def _json_object(

@@ -55,10 +55,13 @@ def test_markdown_block_has_header_schema_and_rows(doc):
     )
 
 
-def test_schema_shows_original_header_when_renamed():
-    doc = Document.from_text("| Owner Name | n |\n|---|---|\n| a | 1 |\n")
-    out = render_table(select(doc.tables[0]), "md")
-    assert 'columns: owner_name TEXT ("Owner Name"), n INTEGER' in out
+def test_sql_names_by_default_and_originals_on_request():
+    doc = Document.from_text("| Owner Name | N |\n|---|---|\n| a | 1 |\n")
+    default = render_table(select(doc.tables[0]), "md").splitlines()
+    assert default[1:3] == ["columns: owner_name TEXT, n INTEGER", "| owner_name | n |"]
+    raw = render_table(select(doc.tables[0]), "md", raw_column_names=True).splitlines()
+    # case-only differences are not repeated in quotes
+    assert raw[1:3] == ['columns: owner_name TEXT ("Owner Name"), n INTEGER', "| Owner Name | N |"]
 
 
 def test_json_object(doc):

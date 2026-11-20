@@ -9,8 +9,17 @@ Feature: Output formats for table data
       | c |  |
       """
 
-  Scenario: CSV is plain data with original headers
+  Scenario: CSV is plain data, headed by SQL column names
     When I run "mdpeek doc.md --table T1 --format csv"
+    Then the output is:
+      """
+      name,score
+      "a, b",1
+      c,
+      """
+
+  Scenario: Original headers on request
+    When I run "mdpeek doc.md --table T1 --format csv --raw-column-names"
     Then the output is:
       """
       Name,Score
@@ -22,7 +31,7 @@ Feature: Output formats for table data
     When I run "mdpeek doc.md --table T1 --format tsv --cols score"
     Then the output is:
       """
-      Score
+      score
       1
       ""
       """
@@ -31,7 +40,7 @@ Feature: Output formats for table data
     When I run "mdpeek doc.md --table T1 --format json"
     Then the output is:
       """
-      {"id":"T1","section":"S0","columns":["Name","Score"],"names":["name","score"],"types":["TEXT","INTEGER"],"rows":[["a, b",1],["c",null]],"total":2,"shown":2,"warnings":[]}
+      {"id":"T1","section":"S0","columns":["name","score"],"names":["name","score"],"types":["TEXT","INTEGER"],"rows":[["a, b",1],["c",null]],"total":2,"shown":2,"warnings":[]}
       """
 
   Scenario: JSON Lines has one object per row

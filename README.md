@@ -73,9 +73,9 @@ $ mdpeek report.md --sql "select region from t4 where growth > 0.1"
 
 | Command | Shows |
 |---|---|
-| `--table ID` | schema (SQL names and types) and the first 5 rows; repeatable |
+| `--table ID` | column names and types, and the first 5 rows; repeatable |
 | `--table ID --full` | every row |
-| `--table ID --rows 10-30 --cols a,b` | a slice; columns by SQL name or original header |
+| `--table ID --rows 10-30 --cols a,b` | a slice; columns by name (original headers also accepted) |
 | `--tables` | one summary line per table (scoped by `-s`); add `--full`/`--rows`/`--cols` to show each |
 | `--sql QUERY` | SQL over every table (scoped by `-s`), loaded as `t1`, `t2`, … |
 | `--format md\|csv\|tsv\|json\|jsonl` | output format for table data (default `md`) |
@@ -85,9 +85,16 @@ $ mdpeek report.md --sql "select region from t4 where growth > 0.1"
   Column names are listed only when they fit in 80 characters. Tune with
   `--table-max-cols`, `--table-max-rows`, `--table-header-max-chars`, or turn
   summaries off with `--no-table-summaries`.
+- **Column names** are shown as their SQL names everywhere (summaries,
+  inline tables, `--table` output), so what you see is what you query.
+  Headers are lowercased, accents become plain ASCII, and every other run of
+  non-alphanumeric characters becomes `_` (`Unit Price ($)` → `unit_price`,
+  `Café / Bar` → `cafe_bar`). A leading digit gets a `c_` prefix, an empty
+  header becomes `col_N`, and duplicates get `_2`, `_3`, …
+  `--raw-column-names` shows the original headers instead (and adds them to
+  the `--table` schema line).
 - **Types** are inferred per column: INTEGER, REAL or TEXT; empty cells are
-  NULL. Column names become lowercase snake_case for SQL (`Item Name` →
-  `item_name`).
+  NULL.
 - **SQL engines:** sqlite (built in) or DuckDB (`pip install 'mdpeek[duckdb]'`).
   The default `--engine auto` uses DuckDB when it is installed; set
   `MDPEEK_ENGINE=sqlite|duckdb` to choose a default.
