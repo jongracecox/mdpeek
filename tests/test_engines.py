@@ -133,3 +133,116 @@ class TestResolveEngine:
 
 def test_run_query_without_tables():
     assert run_query([], "select 1 as one", "sqlite").rows == [[1]]
+
+
+MIXED_DOC = "| value | label |\n|---|---|\n| 1.5 | a |\n| 2 | b |\n| 10 or more | c |\n"
+
+
+def test_type_hints_name_mentioned_mixed_columns():
+    tables = Document.from_text(MIXED_DOC).tables
+    hints = engines_module.type_hints(tables, "select * from t1 where VALUE > 3", Engine.DUCKDB)
+    assert hints == [
+        "hint: t1.value is TEXT because 1 of its 3 values is not numeric "
+        "(e.g. '10 or more'); compare numbers with try_cast(value AS DOUBLE)"
+    ]
+    assert engines_module.type_hints(tables, "select label from t1", Engine.DUCKDB) == []
+    sqlite_hint = engines_module.type_hints(tables, "select value from t1", Engine.SQLITE)
+    assert sqlite_hint[0].endswith("CAST(value AS REAL)")
+
+
+def test_type_error_message_gets_hints():
+    tables = Document.from_text(MIXED_DOC).tables
+    error = engines_module._query_error(
+        Exception("Binder Error: Cannot compare values of type VARCHAR and type INTEGER_LITERAL"),
+        [],
+        tables,
+        "select * from t1 where value > 3",
+        Engine.DUCKDB,
+    )
+    assert str(error).splitlines()[1].startswith("hint: t1.value is TEXT")
+
+
+def test_other_errors_get_no_hints():
+    tables = Document.from_text(MIXED_DOC).tables
+    error = engines_module._query_error(
+        Exception("Parser Error: syntax error"), [], tables, "select value from", Engine.DUCKDB
+    )
+    assert str(error) == "SQL error: Parser Error: syntax error"
+
+
+def test_duckdb_comparison_on_mixed_column_explains_itself():
+    if not engines_module.duckdb_available():
+        pytest.skip("duckdb extra not installed")
+    doc = Document.from_text(MIXED_DOC)
+    with pytest.raises(QueryError, match=r"hint: t1\.value is TEXT"):
+        doc.query("select * from t1 where value > 3", "duckdb")
+    rows = doc.query("select label from t1 where try_cast(value as double) > 1.8", "duckdb").rows
+    assert rows == [["b"]]
+
+
+QUOTED_DOC = "| Order ID | Unit Price ($) |\n|---|---|\n| 1 | 9.5 |\n| 2 | 3 |\n"
+
+
+def test_quoted_identifiers_skip_string_literals():
+    sql = 'select "a ""b""", ' + "'not \"this\"', \"c\" from t1 where x = 'it''s'"
+    assert engines_module._quoted_identifiers(sql) == ['a "b"', "c"]
+
+
+@pytest.mark.parametrize("strict", [True, False], ids=["sqlite-config", "text-check"])
+def test_sqlite_rejects_unknown_double_quoted_names(monkeypatch, strict):
+    if strict and not engines_module._strict_double_quotes(
+        engines_module.sqlite3.connect(":memory:")
+    ):
+        pytest.skip("this Python's sqlite3 cannot switch off double-quoted strings")
+    if not strict:
+        monkeypatch.setattr(engines_module, "_strict_double_quotes", lambda connection: False)
+    doc = Document.from_text(QUOTED_DOC)
+    with pytest.raises(QueryError) as exc:
+        doc.query('select "Order ID" from t1', "sqlite")
+    lines = str(exc.value).splitlines()
+    assert lines[0].startswith('SQL error: no such column: "Order ID"')
+    assert lines[1] == 'hint: "Order ID" is a header; in SQL, use its column name t1.order_id'
+    # quoted real names, table names and aliases still work
+    sql = 'select "order_id", "unit_price" * 2 as "Double" from "t1" order by "Double" desc'
+    assert doc.query(sql, "sqlite").rows == [[1, 19.0], [2, 6.0]]
+
+
+def test_duplicate_headers_share_one_hint():
+    doc = Document.from_text("| Order ID | Order ID |\n|---|---|\n| 1 | 2 |\n")
+    hints = engines_module.column_name_hints(doc.tables, 'select "Order ID" from t1')
+    assert hints == [
+        'hint: "Order ID" is a header; in SQL, use its column name t1.order_id or t1.order_id_2'
+    ]
+
+
+def test_sqlite_notes_on_partly_numeric_columns():
+    doc = Document.from_text(MIXED_DOC)
+    result = doc.query("select label from t1 where value > 1.8", "sqlite")
+    assert result.notes == [
+        "note: t1.value is TEXT because 1 of its 3 values is not numeric "
+        "(e.g. '10 or more'); compare numbers with CAST(value AS REAL)"
+    ]
+    assert doc.query("select label from t1", "sqlite").notes == []
+
+
+def test_duckdb_success_has_no_notes():
+    if not engines_module.duckdb_available():
+        pytest.skip("duckdb extra not installed")
+    doc = Document.from_text(MIXED_DOC)
+    assert doc.query("select value from t1", "duckdb").notes == []
+
+
+def test_duckdb_unknown_header_gets_a_hint():
+    if not engines_module.duckdb_available():
+        pytest.skip("duckdb extra not installed")
+    doc = Document.from_text(QUOTED_DOC)
+    with pytest.raises(QueryError, match=r'hint: "Order ID" is a header.*t1\.order_id'):
+        doc.query('select "Order ID" from t1', "duckdb")
+
+
+def test_install_hint_does_not_assume_pip(monkeypatch):
+    monkeypatch.setattr(engines_module, "duckdb_available", lambda: False)
+    with pytest.raises(EngineUnavailable) as exc:
+        resolve_engine("duckdb", env={})
+    assert "uv tool install 'mdpeek[duckdb]'" in str(exc.value)
+    assert "pip install 'mdpeek[duckdb]'" in str(exc.value)

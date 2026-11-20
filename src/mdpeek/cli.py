@@ -217,6 +217,8 @@ def _run_sql(doc: Document, args: argparse.Namespace) -> str:
         if not table.ok:
             print(f"mdpeek: skipped {table.id} (not parsed: {table.error})", file=sys.stderr)
     result: QueryResult = run_query(tables, args.sql, args.engine or Engine.AUTO)
+    for note in result.notes:
+        print(f"mdpeek: {note}", file=sys.stderr)
     fmt = Format(args.format or Format.MD)
     limit = result.total if args.mode is Mode.FULL else (args.limit or DEFAULT_LIMIT)
     rows = result.rows[:limit]

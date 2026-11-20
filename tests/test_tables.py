@@ -223,3 +223,20 @@ def test_invalid_utf8_file_is_cleaned(tmp_path):
     table = Document.from_path(path).tables[0]
     assert table.rows[0] == ["caf", "x"]
     assert table.warnings == ["bad characters removed from 1 cell"]
+
+
+MIXED = "| value | label |\n|---|---|\n| 1.5 | a |\n| 2 | b |\n| | c |\n| 10 or more | d |\n"
+
+
+def test_column_stats_and_mixed_columns():
+    table = Document.from_text(MIXED).tables[0]
+    assert table.types == ["TEXT", "TEXT"]
+    assert table.stats[0].numeric == 2
+    assert table.stats[0].non_empty == 3
+    assert table.stats[0].sample_text == "10 or more"
+    assert table.mixed_columns() == [0]
+
+
+def test_numeric_and_pure_text_columns_are_not_mixed():
+    table = Document.from_text("| n | t |\n|---|---|\n| 1 | x |\n| 2.5 | y |\n").tables[0]
+    assert table.mixed_columns() == []

@@ -105,3 +105,9 @@ def test_failed_table_output(monkeypatch, fixture_text):
     data = json.loads(render_table(select(doc.table("T1")), "json"))
     assert data["error"] == "boom"
     assert data["raw"].startswith("| key | value |\n")
+
+
+def test_schema_flags_partly_numeric_text_columns():
+    doc = Document.from_text("| value | label |\n|---|---|\n| 1.5 | a |\n| 10 or more | b |\n")
+    out = render_table(select(doc.tables[0]), "md").splitlines()
+    assert out[1] == "columns: value TEXT (1/2 numeric), label TEXT"

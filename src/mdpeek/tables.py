@@ -70,6 +70,21 @@ class TableSettings:
         self.on_error = coerce(OnTableError, self.on_error)
 
 
+@dataclass(frozen=True)
+class ColumnStats:
+    """How many of a column's non-empty values are numeric."""
+
+    numeric: int
+    non_empty: int
+    sample_text: str | None = None
+    """The first value that isn't numeric, if any."""
+
+    @property
+    def mixed(self) -> bool:
+        """Some, but not all, non-empty values are numeric."""
+        return 0 < self.numeric < self.non_empty
+
+
 @dataclass(eq=False)
 class Table:
     """A GFM table and where it sits in the document."""
@@ -83,6 +98,7 @@ class Table:
     rows: list[list[str]] = field(default_factory=list)
     sql_names: list[str] = field(default_factory=list)
     types: list[str] = field(default_factory=list)
+    stats: list[ColumnStats] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
     raw_text: str = ""
@@ -104,6 +120,14 @@ class Table:
     def sql_name(self) -> str:
         """The table's name in SQL queries (``t1`` for ``T1``)."""
         return self.id.lower()
+
+    def mixed_columns(self) -> list[int]:
+        """Indexes of TEXT columns where some, but not all, values are numeric."""
+        return [
+            i
+            for i, (kind, stats) in enumerate(zip(self.types, self.stats, strict=True))
+            if kind == TEXT and stats.mixed
+        ]
 
     def display_headers(self, raw: bool = False) -> list[str]:
         """Column names to show: SQL names, or the original headers if ``raw``."""
@@ -186,6 +210,18 @@ def _fill(table: Table, tokens: Sequence[Token], open_index: int, lines: list[st
         table.warnings.append(f"bad characters removed from {cleaned_cells} cell{plural}")
     table.sql_names = sql_names(table.headers)
     table.types = [infer_type(row[i] for row in table.rows) for i in range(width)]
+    table.stats = [column_stats(row[i] for row in table.rows) for i in range(width)]
+
+
+def column_stats(cells: Any) -> ColumnStats:
+    """Count numeric values among a column's non-empty cells.
+
+    >>> column_stats(["1.99", "2", "", "10 or greater"])
+    ColumnStats(numeric=2, non_empty=3, sample_text='10 or greater')
+    """
+    values = [cell for cell in cells if cell != ""]
+    text = [v for v in values if not _REAL_RE.match(v)]
+    return ColumnStats(len(values) - len(text), len(values), text[0] if text else None)
 
 
 def _raw_cell_count(line: str) -> int:

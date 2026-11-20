@@ -120,6 +120,9 @@ def render_table_list(tables: Sequence[Table], settings: TableSettings, fmt: For
 def _column_spec(table: Table, index: int, raw_column_names: bool) -> str:
     name, header = table.sql_names[index], table.headers[index]
     spec = f"{name} {table.types[index]}"
+    if index in table.mixed_columns():
+        stats = table.stats[index]
+        spec += f" ({stats.numeric}/{stats.non_empty} numeric)"
     if not raw_column_names or header.strip().lower() == name:
         return spec
     return f'{spec} ("{header}")'

@@ -69,6 +69,33 @@ Feature: SQL over tables
       mdpeek: T1 could not be parsed: simulated parse failure
       """
 
+  Scenario: Original headers in SQL are an error with a hint, not a string
+    When I run "mdpeek doc.md --engine sqlite --sql 'select "Order ID" from t1'"
+    Then the exit code is 2
+    And stderr contains:
+      """
+      no such column: "Order ID"
+      """
+    And stderr contains:
+      """
+      hint: "Order ID" is a header; in SQL, use its column name t1.order_id
+      """
+
+  Scenario: sqlite warns about text columns that are partly numeric
+    Given a markdown file containing:
+      """
+      | value | colour |
+      |-------|--------|
+      | 1.99 | red |
+      | 10 or greater | green |
+      """
+    When I run "mdpeek doc.md --engine sqlite --sql 'select colour from t1 where value > 3'"
+    Then the exit code is 0
+    And stderr contains:
+      """
+      mdpeek: note: t1.value is TEXT because 1 of its 2 values is not numeric (e.g. '10 or greater'); compare numbers with CAST(value AS REAL)
+      """
+
   Scenario Outline: Invalid SQL requests
     When I run "mdpeek doc.md <args>"
     Then the exit code is 2
