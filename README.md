@@ -1,5 +1,16 @@
 # mdpeek
 
+[![pypi package](https://badge.fury.io/py/mdpeek.svg)](https://pypi.org/project/mdpeek)
+[![release](https://github.com/jongracecox/mdpeek/actions/workflows/release.yml/badge.svg)](https://github.com/jongracecox/mdpeek/actions/workflows/release.yml)
+[![GitHub last commit](https://img.shields.io/github/last-commit/jongracecox/mdpeek.svg)](https://github.com/jongracecox/mdpeek/commits/main)
+[![GitHub](https://img.shields.io/github/license/jongracecox/mdpeek.svg)](https://github.com/jongracecox/mdpeek/blob/main/LICENSE)
+[![downloads](https://pepy.tech/badge/mdpeek)](https://pepy.tech/project/mdpeek)
+[![tests](https://github.com/jongracecox/mdpeek/actions/workflows/tests.yml/badge.svg)](https://github.com/jongracecox/mdpeek/actions/workflows/tests.yml)
+![coverage](https://raw.githubusercontent.com/jongracecox/mdpeek/badges/coverage.svg)
+[![GitHub stars](https://img.shields.io/github/stars/jongracecox/mdpeek.svg?style=social)](https://github.com/jongracecox/mdpeek/stargazers)
+
+[![buymeacoffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/jongracecox)
+
 Progressive exposure for markdown: navigate large markdown files by section,
 without loading the whole document into context. Built for AI agents, handy
 for humans.
