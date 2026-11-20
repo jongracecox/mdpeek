@@ -94,8 +94,16 @@ $ mdpeek report.md --sql "select region from t4 where growth > 0.1"
   `--raw-column-names` shows the original headers instead (and adds them to
   the `--table` schema line).
 - **Types** are inferred per column: INTEGER, REAL or TEXT; empty cells are
-  NULL.
-- **SQL engines:** sqlite (built in) or DuckDB (`pip install 'mdpeek[duckdb]'`).
+  NULL. A column is numeric only if every value is, so `1.99, 2.0, 10 or
+  greater` is TEXT. The schema line flags such columns
+  (`value TEXT (2/3 numeric)`), and a query that compares them with numbers
+  fails with a hint to cast, e.g. `try_cast(value AS DOUBLE)` in DuckDB.
+  sqlite doesn't fail on such comparisons, so mdpeek prints a note instead.
+- **Quoted names:** using an original header in SQL (`select "Order ID" …`)
+  is an error with a hint naming the column to use, never a silent string
+  literal (sqlite's legacy behaviour).
+- **SQL engines:** sqlite (built in) or DuckDB (`uv tool install 'mdpeek[duckdb]'`
+  or `pip install 'mdpeek[duckdb]'`).
   The default `--engine auto` uses DuckDB when it is installed; set
   `MDPEEK_ENGINE=sqlite|duckdb` to choose a default.
 - **Malformed tables:** ragged rows and bad characters are fixed and noted in

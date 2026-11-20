@@ -70,6 +70,21 @@ Feature: Showing tables on demand
       | clip | 0.12 |
       """
 
+  Scenario: The schema flags text columns that are partly numeric
+    Given a markdown file containing:
+      """
+      | value | colour |
+      |-------|--------|
+      | 1.99 | red |
+      | 2.0 | orange |
+      | 10 or greater | green |
+      """
+    When I run "mdpeek doc.md --table T1 --rows 1"
+    Then the output contains:
+      """
+      columns: value TEXT (2/3 numeric), colour TEXT
+      """
+
   Scenario: Listing every table
     When I run "mdpeek doc.md --tables"
     Then the output is:
