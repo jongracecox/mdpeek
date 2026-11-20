@@ -66,6 +66,14 @@ Reference intro...
 
 `FILE` can be `-` to read from stdin, or an `http(s)://` URL.
 
+For AI agents, `mdpeek --agent-instructions` prints a compact guide to every
+feature (about 800 tokens). Point an agent at it from your `CLAUDE.md` or
+`AGENTS.md`:
+
+```markdown
+Read large markdown files with mdpeek. Run `mdpeek --agent-instructions` first.
+```
+
 ## Diagrams
 
 Mermaid, PlantUML (`plantuml`/`puml`), Graphviz (`dot`/`graphviz`) and D2

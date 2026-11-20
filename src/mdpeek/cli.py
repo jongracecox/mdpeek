@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
+from importlib.resources import files
 from pathlib import Path
 
 from mdpeek import __version__
@@ -61,6 +62,25 @@ def _column_list(value: str) -> list[str]:
     return [column for column in (c.strip() for c in value.split(",")) if column]
 
 
+def agent_instructions() -> str:
+    """Return the compact usage guide written for AI agents."""
+    return files("mdpeek").joinpath("agent_instructions.md").read_text(encoding="utf-8")
+
+
+class _AgentInstructionsAction(argparse.Action):
+    """Print the agent guide and exit, like --version (no SOURCE needed)."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        sys.stdout.write(agent_instructions())
+        parser.exit()
+
+
 def build_parser() -> argparse.ArgumentParser:
     defaults = TableSettings()
     parser = argparse.ArgumentParser(
@@ -69,6 +89,13 @@ def build_parser() -> argparse.ArgumentParser:
         "or a directory of them as a tree.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument(
+        "--agent-instructions",
+        action=_AgentInstructionsAction,
+        nargs=0,
+        default=argparse.SUPPRESS,
+        help="print a compact usage guide for AI agents and exit",
+    )
     parser.add_argument(
         "source", help="markdown file path, directory, http(s) URL, or '-' for stdin"
     )
