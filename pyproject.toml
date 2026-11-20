@@ -1,0 +1,83 @@
+[project]
+name = "mdpeek"
+dynamic = ["version"]
+description = "Progressive exposure for markdown: navigate large documents by section and query their tables"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Jon Grace-Cox", email = "30441316+jongracecox@users.noreply.github.com" },
+]
+keywords = ["markdown", "cli", "llm", "agents", "context", "claude-code"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "markdown-it-py>=3.0",
+]
+
+[project.optional-dependencies]
+duckdb = ["duckdb>=1.1"]
+
+[project.urls]
+Homepage = "https://github.com/jongracecox/mdpeek"
+Issues = "https://github.com/jongracecox/mdpeek/issues"
+Repository = "https://github.com/jongracecox/mdpeek"
+
+[project.scripts]
+mdpeek = "mdpeek.cli:main"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mdpeek"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pytest-bdd>=8.1.0",
+    "ty",
+    "nox>=2025.5.1",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src"]
+addopts = ["--doctest-modules", "--strict-markers", "-v", "--cov=mdpeek", "--cov-report=term-missing"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["src/mdpeek"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "if __name__ == .__main__.",
+    "pragma: no cover",
+]
