@@ -110,7 +110,7 @@ def render_table_list(tables: Sequence[Table], settings: TableSettings, fmt: For
     """One line (or JSON object) per table, for ``--tables`` with no data flags."""
     fmt = coerce(Format, fmt)
     if fmt in (Format.JSON, Format.JSONL):
-        objects = [_describe(t) for t in tables]
+        objects = [_describe(t, settings.raw_column_names) for t in tables]
         if fmt is Format.JSONL:
             return "".join(to_json(o) for o in objects)
         return to_json(objects)
@@ -148,13 +148,13 @@ def _json_object(
     }
 
 
-def _describe(table: Table) -> dict[str, Any]:
+def _describe(table: Table, raw_column_names: bool) -> dict[str, Any]:
     return {
         "id": table.id,
         "section": table.section_id,
         "cols": table.n_cols,
         "rows": table.n_rows,
-        "columns": table.headers,
+        "columns": table.display_headers(raw_column_names),
         "names": table.sql_names,
         "types": table.types,
         "warnings": table.warnings,
