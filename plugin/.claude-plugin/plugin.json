@@ -1,0 +1,11 @@
+{
+  "name": "mdpeek",
+  "description": "Read large markdown files, docs URLs and markdown directories with mdpeek: outline first, then only the sections, tables, diagrams or code blocks you need.",
+  "author": {
+    "name": "Jon Grace-Cox"
+  },
+  "homepage": "https://github.com/jongracecox/mdpeek",
+  "repository": "https://github.com/jongracecox/mdpeek",
+  "license": "MIT",
+  "keywords": ["markdown", "context", "tokens", "documentation"]
+}

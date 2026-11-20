@@ -294,6 +294,20 @@ $ mdpeek report.md --sql "select region from t4 where growth > 0.1"
   the summary. A table that cannot be parsed keeps its ID (`[T3!]`), and
   `--on-table-error show|summary|exclude` controls how it appears.
 
+## Claude Code plugin
+
+This repository is also a Claude Code plugin marketplace. The plugin adds a
+skill that tells Claude to use mdpeek on large markdown files, docs URLs and
+markdown directories instead of reading them whole:
+
+```text
+/plugin marketplace add jongracecox/mdpeek
+/plugin install mdpeek@mdpeek
+```
+
+The skill needs `mdpeek` on your `PATH` (any install method above), or falls
+back to `uvx mdpeek`.
+
 ## Python API
 
 ```python
