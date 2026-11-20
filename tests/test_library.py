@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -119,3 +120,28 @@ def test_a_flat_directory_over_budget_suggests_more_entries(tmp_path: Path) -> N
         write(tmp_path, f"note{i}.md", "plain text\n")
     fit = Library.from_path(tmp_path).fit(5)
     assert (fit.first, fit.lines, fit.next_step, fit.next_lines) == (3, 5, "-n 4", 6)
+
+
+def test_grep_limits_must_be_positive(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="first must be at least 1"):
+        Library.from_path(tmp_path).grep(re.compile("x"), first=0)
+
+
+def test_grep_over_budget_says_so(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    write(tmp_path, "a.md", "# A\n## B\nneedle\n## C\nneedle\n")
+    assert main([str(tmp_path), "--grep", "needle", "--budget", "2"]) == 0
+    assert "mdpeek: grep: -n 1 is 4 lines, the smallest, over --budget 2" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0, reason="needs POSIX permissions")
+def test_grep_reports_unreadable_files(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    write(tmp_path, "ok.md", "# Ok\nneedle\n")
+    write(tmp_path, "locked.md", "# Locked\nneedle\n")
+    (tmp_path / "locked.md").chmod(0)
+    try:
+        assert main([str(tmp_path), "--grep", "needle"]) == 0
+    finally:
+        (tmp_path / "locked.md").chmod(0o644)
+    captured = capsys.readouterr()
+    assert "(1 match in 1 file)" in captured.out
+    assert "locked.md: Permission denied" in captured.err

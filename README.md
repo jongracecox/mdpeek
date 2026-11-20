@@ -237,7 +237,38 @@ Second.
   gitignore-style: `*` stays within one directory and `**` crosses them
   (`guides/**/*.md`).
 
-## Tables
+## Search
+
+`--grep PATTERN` lists the sections with lines matching a regular
+expression, so you can find where something is discussed before opening it.
+
+```console
+$ mdpeek guide.md --grep 'retry|timeout'
+[S4.2] Network (3 matches)
+[S4.2.1] Retries (5 matches)
+
+$ mdpeek docs/ --grep 'run|first'
+docs/ (4 matches in 3 files)
+  guides/install.md Install (2 matches)
+    [S1.1] Linux (1 match)
+    [S1.2] macOS (1 match)
+  changelog.md Changelog (1 match)
+    [S1.2] 1.0 (1 match)
+  notes.md Part one +2 (1 match)
+    [S1] Part one (1 match)
+```
+
+- **Smart case:** matching ignores case unless the pattern has a capital
+  letter.
+- **Every line is searched:** headings, text, tables and fenced blocks. A
+  line counts for the innermost section around it.
+- **On a file,** `-s ID` limits the search to those sections.
+- **On a directory,** files are grouped with the most matches first, and
+  `--include` / `--exclude` choose the files. Results fit the line budget
+  (150 by default): mdpeek picks the largest `-n` (first N files, and first N
+  sections in each) that fits, and says so on stderr. `-n N` sets it
+  yourself, and `--budget LINES` changes the budget.
+
 
 Large tables cost a lot of context, so document output replaces them with a
 one-line summary and an ID. Small tables stay inline under their ID.
@@ -338,6 +369,11 @@ library = Library.from_path("docs/", exclude=["drafts"])
 print(library.tree(levels=2, first=10, depth=1))
 fit = library.fit(budget=150)  # TreeFit(levels, depth, first, lines, next_step, ...)
 print(library.tree(levels=fit.levels, depth=fit.depth or None, first=fit.first))
+
+from mdpeek.search import compile_pattern, section_hits
+
+hits = section_hits(doc, compile_pattern("retry|timeout"))  # [(Section, count), ...]
+print(library.grep(compile_pattern("install"), budget=150).text)
 ```
 
 ## License
