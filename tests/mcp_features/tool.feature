@@ -32,6 +32,17 @@ Feature: The MCP tool
         [S1.2] macOS (1)
       """
 
+  Scenario: Full on a source file shows the whole file
+    When the agent calls the tool with {"source": "guides/install.md", "full": true}
+    Then the result is:
+      """
+      [S1] Install
+        [S1.1] Linux
+      Run the installer.
+        [S1.2] macOS
+      Run it too.
+      """
+
   Scenario: IDs fetch items from several files, each labelled
     When the agent calls the tool with {"ids": ["guides/install.md#S1.1", "guides/deploy.md#T1"]}
     Then the result is:

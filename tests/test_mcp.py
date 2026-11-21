@@ -29,6 +29,11 @@ def test_file_map_honours_depth():
     assert "[S1.1]" in docs.call_sync(source="guides/install.md")
 
 
+def test_full_needs_a_file():
+    with pytest.raises(ToolError, match="full applies to one file"):
+        Toolset(docs_dir=FIXTURES / "library").call_sync(full=True)
+
+
 def test_diagrams_and_fences_by_id(small):
     listed = small.call_sync(source="diagrams.md", show="diagrams")
     assert listed.startswith("[D1]")

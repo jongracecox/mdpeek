@@ -48,6 +48,7 @@ One tool. What it does depends on which argument is given:
 |------|--------|
 | `docs()` | The map: the directory tree with file titles, sizes and headings, fitted to 150 lines. |
 | `docs(source="guides/install.md")` | One file's outline: `[S1.2] Title (12)` per heading. |
+| `docs(source="guides/install.md", full=True)` | The whole file (cut at `max_output_chars`). |
 | `docs(ids=["guides/install.md#S1.2", "guides/deploy.md#T1"])` | Those sections, tables, diagrams (`D1`), code blocks (`F1`) or front matter (`meta`). |
 | `docs(show="tables")` | One line per table (or `diagrams`, `fences`, `meta`), grouped by file. |
 | `docs(grep="retry\|timeout")` | Sections with matching lines, files with most matches first. |

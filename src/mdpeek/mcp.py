@@ -304,6 +304,10 @@ class Toolset:
     def _on_file(self, args: _Args, doc: Document, label: str | None) -> _Result:
         sections = args.section_ids
         if args.mode == "map":
+            if args.full:  # the whole file, asked for explicitly
+                return _Result(
+                    render(doc, Mode.FULL, args.depth, None, self.tables, self.diagram_summaries)
+                )
             return _Result(render(doc, Mode.STRUCTURE, args.depth))
         if args.mode == "grep":
             return _from_ops(ops.grep_file(doc, args.grep or "", sections))
@@ -400,6 +404,8 @@ class Toolset:
     def _on_directory(self, args: _Args, root: Path) -> _Result:
         if args.mode == "sql":
             raise ToolError("sql works on one file; pass source=PATH to a file")
+        if args.full and args.mode == "map":
+            raise ToolError("full applies to one file or to ids; pass source=PATH to a file")
         if args.mode == "ids":
             return self._fetch_from_directory(args, root)
         if args.ids:
@@ -505,6 +511,7 @@ class Toolset:
             "",
             f"{name}()                          map: directory tree with titles, sizes, headings",
             f'{name}(source="a.md")             outline of one file: [S1.2] Title (own lines)',
+            f'{name}(source="a.md", full=True)  the whole file (large files are cut; prefer ids)',
             f'{name}(source="guides")           tree of one folder',
             f'{name}(ids=["a.md#S2"])           a section, its subsections as one-line stubs',
             f'{name}(ids=["a.md#S2"], depth=2)  ... plus one more level',
