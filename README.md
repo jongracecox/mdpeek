@@ -126,6 +126,30 @@ $ mdpeek README.md --fence F1 | sh               # one block: just the source
 A fence with no language is listed as `plain`; a diagram fence also shows
 its diagram ID (`= D1`). `--format json|jsonl` works here too.
 
+## Front matter
+
+A metadata block fenced at the very top of a file, by `---` (YAML) or `+++`
+(TOML), is front matter. mdpeek recognises it by its fences only: there is
+no standard set of keys, so it never reads `title` or anything else from it.
+Document output shows a one-line marker with its line count in its place,
+and `--meta` prints the block.
+
+```console
+$ mdpeek guide.md --structure
+[meta] (3)
+[S1] Guide (4)
+$ mdpeek guide.md --meta
+title: Guide
+tags: [setup]
+owner: docs
+$ mdpeek docs/ --meta                # every file's, each under ==> PATH <==
+```
+
+`S0` is content after the front matter, so a file with front matter and no
+preamble has no `S0`. `--format json|jsonl` gives
+`{"format": "yaml", "lines": 3, "source": "..."}` (with `"path"` on a
+directory). An unclosed block is ordinary text.
+
 ## URLs and caching
 
 ```console
@@ -208,6 +232,7 @@ Second.
 | `mdpeek DIR --table PATH#ID ...` | tables from files in the directory; `--format` other than `md` takes one file at a time |
 | `mdpeek DIR --tables`, `--diagrams`, `--fences` | every item's summary line, grouped by file |
 | `mdpeek DIR --diagram PATH#ID ...`, `--fence PATH#ID ...` | diagrams or fenced blocks; one prints its bare source, several are each labelled under `==> PATH <==` |
+| `mdpeek DIR --meta` | every file's front matter, each under `==> PATH <==`, in tree order |
 | `--include GLOB` | list these files instead of `*.md` and `*.markdown`; repeatable |
 | `--exclude GLOB` | skip matching files and directories; repeatable |
 

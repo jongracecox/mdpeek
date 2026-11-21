@@ -1,8 +1,8 @@
 # mdpeek: read large markdown a piece at a time
 
-Use mdpeek instead of reading a whole markdown file or URL. Get the outline,
-then open only the sections, tables, diagrams and code blocks you need.
-`mdpeek SOURCE [options]`, where SOURCE is a file, a directory, an http(s) URL, or `-`.
+Use mdpeek instead of reading a whole markdown file or URL: get the outline,
+then open only the parts you need.
+`mdpeek SOURCE [options]`; SOURCE is a file, directory, http(s) URL or `-`.
 
 ## Navigate
 
@@ -14,6 +14,7 @@ mdpeek doc.md -s S2.1 -s S4         # those sections, subsections as stubs
 mdpeek doc.md -s S2 -d 2            # a section plus one level below it
 mdpeek doc.md -s S2 --full          # a section and all its subsections
 mdpeek doc.md --grep 'retry|limit'  # sections with matching lines (regex)
+mdpeek doc.md --meta                # front matter (`[meta] (N)` in output)
 ```
 
 IDs come from heading position, never heading text. `S0` is content before
@@ -57,7 +58,7 @@ mdpeek docs/ -L 2 -n 5              # fixed: 2 levels, first 5 entries; no budge
 mdpeek docs/ -d 1                   # also each file's headings
 mdpeek docs/ --grep install         # by file, most matches first
 mdpeek docs/ -s guides/install.md#S1.2 -s notes.md   # a section, a whole file
-mdpeek docs/ --tables                # every table, by file; also --diagrams, --fences
+mdpeek docs/ --tables                # every table, by file; also --diagrams, --fences, --meta
 mdpeek docs/ --table guides/deploy.md#T1             # also --diagram, --fence
 mdpeek docs/ --exclude reference --include '*.md'    # gitignore-style globs
 ```

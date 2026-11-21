@@ -23,10 +23,9 @@ from markdown_it.token import Token
 
 from mdpeek.diagrams import build_diagrams
 from mdpeek.fences import build_fences
+from mdpeek.meta import find_front_matter
 from mdpeek.model import PREAMBLE_ID, Document, Section
 from mdpeek.tables import build_tables
-
-_FRONT_MATTER_FENCES = {"---": ("---", "..."), "+++": ("+++",)}
 
 
 @dataclass
@@ -40,21 +39,23 @@ class _Heading:
 def parse(text: str) -> Document:
     """Parse ``text`` into a document with a section tree."""
     lines = text.splitlines(keepends=True)
-    tokens = _tokenize(lines)
+    meta = find_front_matter(lines)
+    meta_end = meta.end if meta else 0
+    tokens = _tokenize(lines, meta_end)
     headings = _find_headings(tokens)
     total = len(lines)
 
     sections: list[Section] = []
     first_heading = headings[0].start if headings else total
-    if any(line.strip() for line in lines[:first_heading]):
+    if any(line.strip() for line in lines[meta_end:first_heading]):
         sections.append(
             Section(
                 id=PREAMBLE_ID,
                 title="",
                 level=0,
                 depth=1,
-                start=0,
-                body_start=0,
+                start=meta_end,
+                body_start=meta_end,
                 body_end=first_heading,
                 end=first_heading,
             )
@@ -90,7 +91,7 @@ def parse(text: str) -> Document:
         stack.append(section)
 
     _close_subtrees(sections, total)
-    doc = Document(text=text, lines=lines, sections=sections)
+    doc = Document(text=text, lines=lines, sections=sections, meta=meta)
     doc.tables = build_tables(tokens, lines, lambda line: _section_at(doc, line))
     doc.diagrams = build_diagrams(tokens, lines, lambda line: _section_at(doc, line))
     doc.fences = build_fences(tokens, lines, lambda line: _section_at(doc, line), doc.diagrams)
@@ -112,10 +113,10 @@ def _close_subtrees(siblings: list[Section], end: int) -> None:
         _close_subtrees(section.children, section.end)
 
 
-def _tokenize(lines: list[str]) -> list[Token]:
+def _tokenize(lines: list[str], meta_end: int) -> list[Token]:
     """Parse with markdown-it (CommonMark plus GFM tables)."""
     masked = list(lines)
-    for i in range(_front_matter_end(lines)):
+    for i in range(meta_end):
         # Blank out front matter so markdown-it can't read it as headings
         # (its closing '---' would otherwise make a setext heading).
         masked[i] = "\n"
@@ -138,16 +139,3 @@ def _find_headings(tokens: list[Token]) -> list[_Heading]:
             )
         )
     return headings
-
-
-def _front_matter_end(lines: list[str]) -> int:
-    """Return the line index after a leading YAML/TOML front matter block, or 0."""
-    if not lines:
-        return 0
-    closers = _FRONT_MATTER_FENCES.get(lines[0].strip())
-    if closers is None:
-        return 0
-    for i in range(1, len(lines)):
-        if lines[i].strip() in closers:
-            return i + 1
-    return 0

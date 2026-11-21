@@ -42,6 +42,7 @@ src/mdpeek/
 ├── fences.py        # every fenced block: --fence / --fences
 ├── formats.py       # md / csv / tsv / json / jsonl output
 ├── library.py       # directory of markdown files as a tree
+├── meta.py          # front matter: [meta] marker and --meta
 ├── model.py         # Section / Document tree and ID lookup
 ├── options.py       # StrEnum API options and coerce()
 ├── parse.py         # markdown -> section tree and tables (markdown-it)

@@ -18,6 +18,7 @@ from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
 from mdpeek.fences import FenceNotFound, render_fence_list, render_fences
 from mdpeek.formats import format_rows, to_json
 from mdpeek.library import DEFAULT_BUDGET, FileNode, Grouped, Library, resolve_ref
+from mdpeek.meta import render_meta, render_meta_list
 from mdpeek.model import Document, SectionNotFound
 from mdpeek.options import Engine, Format, Mode, OnTableError
 from mdpeek.render import render
@@ -213,6 +214,11 @@ def build_parser() -> argparse.ArgumentParser:
         "with --full, show each",
     )
     targets.add_argument(
+        "--meta",
+        action="store_true",
+        help="print the front matter block (on a directory, every file's)",
+    )
+    targets.add_argument(
         "--sql",
         metavar="QUERY",
         help="run SQL over the tables (in --section scope), loaded as t1, t2, ...",
@@ -377,6 +383,7 @@ _GREP_CONFLICTS = (
 def _check_grep(args: argparse.Namespace, *also: str) -> None:
     used = _used(args, (*_GREP_CONFLICTS, *also)) + [_flag(n) for n in _LISTS if getattr(args, n)]
     used += [_flag(args.mode.value)] if args.mode is not Mode.VIEW else []
+    used += ["--meta"] if args.meta else []
     if used:
         raise UsageError(f"{_flags(used)} cannot be combined with --grep")
 
@@ -477,6 +484,8 @@ def _list_directory(args: argparse.Namespace, settings: TableSettings) -> str:
 
 def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
     _reject_url_flags(args)
+    if args.meta:
+        return _meta_from_directory(args)
     if args.grep is not None:
         return _grep_directory(args)
     if any(getattr(args, k) for k in _LIST_KINDS) and not args.section:
@@ -512,6 +521,34 @@ def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
             file=sys.stderr,
         )
     return library.tree(levels=fit.levels, first=fit.first, depth=fit.depth or None)
+
+
+def _meta_from_directory(args: argparse.Namespace) -> str:
+    """The front matter of every file in the directory that has one."""
+    used = _used(
+        args,
+        ("levels", "first", "budget", "depth", "section", "engine", "rows", "cols", "limit"),
+    )
+    used += [_flag(args.mode.value)] if args.mode is not Mode.VIEW else []
+    if used:
+        raise UsageError(f"{_flags(used)} cannot be combined with --meta on a directory")
+    _check_meta_format(args)
+    library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
+    for skipped in library.skipped:
+        print(f"mdpeek: skipped {skipped}", file=sys.stderr)
+    entries = [
+        (library.relative(node), node.doc.meta)
+        for node in library.files_in_order()
+        if node.doc.meta
+    ]
+    return render_meta_list(entries, args.format or Format.MD)
+
+
+def _check_meta_format(args: argparse.Namespace) -> None:
+    if args.format in (Format.CSV.value, Format.TSV.value):
+        raise UsageError(
+            f"--format {args.format} does not apply to front matter; use md, json or jsonl"
+        )
 
 
 def _fetch_from_directory(args: argparse.Namespace, settings: TableSettings) -> str:
@@ -582,6 +619,13 @@ def _reject_tree_flags(args: argparse.Namespace) -> None:
 def _check_combinations(args: argparse.Namespace) -> None:
     if args.engine is not None and args.sql is None:
         raise UsageError("--engine only applies with --sql")
+    if args.meta:
+        for used, flag in ((args.section, "--section"), (args.depth, "--depth")):
+            if used:
+                raise UsageError(f"{flag} cannot be combined with --meta")
+        if args.mode is not Mode.VIEW:
+            raise UsageError(f"{_flag(args.mode.value)} cannot be combined with --meta")
+        _check_meta_format(args)
     diagram_mode = bool(args.diagram or args.diagrams or args.fence or args.fences)
     data_mode = bool(args.table or args.tables or args.sql is not None)
     slicing = [f"--{f}" for f in ("rows", "cols", "limit") if getattr(args, f) is not None]
@@ -591,8 +635,8 @@ def _check_combinations(args: argparse.Namespace) -> None:
             raise UsageError(f"{', '.join(used)} cannot be combined with --sql")
     if slicing and not data_mode:
         raise UsageError(f"{_flags(slicing)} only {_verb(slicing)} with --table, --tables or --sql")
-    targets = "--table, --tables, --sql, --diagram(s) or --fence(s)"
-    if not (data_mode or diagram_mode):
+    targets = "--table, --tables, --sql, --diagram(s), --fence(s) or --meta"
+    if not (data_mode or diagram_mode or args.meta):
         if args.format is not None:
             raise UsageError(f"--format only applies with {targets}")
         return
@@ -607,6 +651,13 @@ def _check_combinations(args: argparse.Namespace) -> None:
     if diagram_mode and args.format in (Format.CSV.value, Format.TSV.value):
         what = "fenced blocks" if (args.fence or args.fences) else "diagrams"
         raise UsageError(f"--format {args.format} does not apply to {what}; use md, json or jsonl")
+
+
+def _show_meta(doc: Document, args: argparse.Namespace) -> str:
+    if doc.meta is None:
+        print("mdpeek: no front matter", file=sys.stderr)
+        return ""
+    return render_meta(doc.meta, args.format or Format.MD)
 
 
 def _show_fences(doc: Document, args: argparse.Namespace, label_single: bool = False) -> str:
@@ -734,6 +785,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = _show_diagrams(doc, args)
         elif args.fence or args.fences:
             output = _show_fences(doc, args)
+        elif args.meta:
+            output = _show_meta(doc, args)
         else:
             output = render(
                 doc, args.mode, args.depth, args.section, settings, args.diagram_summaries
