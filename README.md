@@ -379,6 +379,21 @@ markdown directories instead of reading them whole:
 The skill needs `mdpeek` on your `PATH` (any install method above), or falls
 back to `uvx mdpeek`.
 
+## MCP server
+
+mdpeek ships a ready-made MCP tool. Add it to a server built on the official
+`mcp` SDK or fastmcp, and agents read your docs a piece at a time:
+
+```python
+from mdpeek.mcp import Toolset
+
+Toolset(docs_dir="docs").register(server, name="docs")
+```
+
+One tool covers the map, sections, tables, search and read-only SQL. It reads
+only inside `docs_dir`, and has hooks for telemetry and access control. See
+[docs/mcp.md](docs/mcp.md).
+
 ## Python API
 
 ```python
