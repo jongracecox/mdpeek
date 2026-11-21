@@ -246,3 +246,67 @@ def test_install_hint_does_not_assume_pip(monkeypatch):
         resolve_engine("duckdb", env={})
     assert "uv tool install 'mdpeek[duckdb]'" in str(exc.value)
     assert "pip install 'mdpeek[duckdb]'" in str(exc.value)
+
+
+# Safe mode: read-only queries for SQL written by someone other than the user.
+
+UNSAFE = [
+    "attach database '{dir}/x.db' as x",
+    "vacuum into '{dir}/x.db'",
+    "pragma table_info(t1)",
+    "insert into t1 values (9, 'x', 1, 1, '')",
+    "create table z (a int)",
+    "copy t1 to '{dir}/x.csv'",
+]
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+@pytest.mark.parametrize("sql", UNSAFE)
+def test_safe_mode_refuses_anything_but_reads(doc, engine, sql, tmp_path):
+    with pytest.raises(QueryError):
+        run_query(doc.tables, sql.format(dir=tmp_path), engine, safe=True)
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_safe_mode_names_the_rule(doc, engine):
+    with pytest.raises(QueryError, match="only read-only queries"):
+        run_query(doc.tables, "pragma table_info(t1)", engine, safe=True)
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_safe_mode_still_allows_joins_and_ctes(doc, engine):
+    sql = (
+        "with recursive c(n) as (select 1 union all select n + 1 from c where n < 2) "
+        "select t1.item_name, t2.supplier, c.n from t1 join t2 on t1.id = t2.item_id "
+        "join c on c.n = t1.id order by 1"
+    )
+    result = run_query(doc.tables, sql, engine, safe=True)
+    assert result.rows == [["bolt", "Acme", 1], ["nut", "Bolt Co", 2]]
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_safe_mode_blocks_file_reads(engine, tmp_path):
+    secret = tmp_path / "secret.csv"
+    secret.write_text("a\n1\n")
+    with pytest.raises(QueryError):
+        run_query([], f"select * from read_csv('{secret}')", engine, safe=True)
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_timeout_stops_a_runaway_query(engine):
+    sql = "with recursive c(n) as (select 1 union all select n + 1 from c) select count(*) from c"
+    with pytest.raises(QueryError, match=r"query stopped after 0\.5s"):
+        run_query([], sql, engine, timeout=0.5)
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_max_rows_keeps_the_first_rows_and_says_there_are_more(doc, engine):
+    result = run_query(doc.tables, "select id from t1 order by id", engine, max_rows=2)
+    assert result.rows == [[1], [2]]
+    assert result.more
+    assert not run_query(doc.tables, "select id from t1", engine, max_rows=3).more
+
+
+def test_unsafe_mode_is_unchanged(doc):
+    assert run_query(doc.tables, "pragma table_info(t2)", "sqlite").rows

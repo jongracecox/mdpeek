@@ -41,6 +41,7 @@ src/mdpeek/
 ├── engines.py       # SQL over tables: sqlite, optional duckdb
 ├── fences.py        # every fenced block: --fence / --fences
 ├── formats.py       # md / csv / tsv / json / jsonl output
+├── guard.py         # confining directory and URL policy for untrusted input
 ├── library.py       # directory of markdown files as a tree
 ├── meta.py          # front matter: [meta] marker and --meta
 ├── model.py         # Section / Document tree and ID lookup

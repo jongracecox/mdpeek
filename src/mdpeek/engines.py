@@ -12,6 +12,13 @@ Engines:
 ``MDPEEK_ENGINE`` environment variable overrides AUTO; an explicit engine
 overrides both. Asking for DuckDB when it is missing is an error, never a
 silent fallback.
+
+**Safe mode** (``safe=True``) is for queries written by someone other than
+the user, such as a model calling an MCP tool. It allows only read-only
+queries: sqlite runs under an allow-list authoriser (``SELECT``, reads,
+functions, recursive CTEs; ``ATTACH``, ``PRAGMA`` and writes are refused),
+and DuckDB checks the statement type and runs with external access off. A
+query is stopped after ``timeout`` seconds (default 10 in safe mode).
 """
 
 from __future__ import annotations
@@ -20,6 +27,8 @@ import importlib.util
 import os
 import re
 import sqlite3
+import threading
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -28,6 +37,21 @@ from mdpeek.options import Engine, coerce
 from mdpeek.tables import INTEGER, REAL, Table
 
 ENV_VAR = "MDPEEK_ENGINE"
+
+SAFE_TIMEOUT = 10.0
+"""Seconds a safe-mode query may run when no ``timeout`` is given."""
+
+READ_ONLY_MESSAGE = "only read-only queries are allowed (SELECT or WITH ... SELECT)"
+
+_SQLITE_ALLOWED = frozenset(
+    {
+        sqlite3.SQLITE_SELECT,
+        sqlite3.SQLITE_READ,
+        sqlite3.SQLITE_FUNCTION,
+        getattr(sqlite3, "SQLITE_RECURSIVE", 33),
+    }
+)
+_PROGRESS_STEPS = 10_000
 
 _MISSING_TABLE_RE = re.compile(
     r"no such table: (\w+)|Table with name (\w+) does not exist", re.IGNORECASE
@@ -69,6 +93,8 @@ class QueryResult:
     """Tables left out of the database because they failed to parse."""
     notes: list[str] = field(default_factory=list)
     """Warnings about the query that didn't stop it running."""
+    more: bool = False
+    """More rows were available than ``max_rows``; ``total`` counts only those kept."""
 
     @property
     def total(self) -> int:
@@ -103,23 +129,50 @@ def run_query(
     sql: str,
     engine: Engine | str = Engine.AUTO,
     env: Mapping[str, str] | None = None,
+    *,
+    safe: bool = False,
+    timeout: float | None = None,
+    max_rows: int | None = None,
 ) -> QueryResult:
-    """Load ``tables`` and run ``sql``. Raises :class:`QueryError` on failure."""
+    """Load ``tables`` and run ``sql``. Raises :class:`QueryError` on failure.
+
+    ``safe`` allows only read-only queries (see the module docs). ``timeout``
+    stops a query after that many seconds. ``max_rows`` keeps at most that many
+    rows and sets :attr:`QueryResult.more` when there were more.
+    """
     chosen = resolve_engine(engine, env)
     loaded = [t for t in tables if t.ok]
     skipped = [t for t in tables if not t.ok]
+    limits = _Limits(safe, SAFE_TIMEOUT if timeout is None and safe else timeout, max_rows)
     try:
         if chosen is Engine.DUCKDB:
-            columns, rows = _run_duckdb(loaded, sql)
+            columns, rows = _run_duckdb(loaded, sql, limits)
         else:
-            columns, rows = _run_sqlite(loaded, sql)
+            columns, rows = _run_sqlite(loaded, sql, limits)
     except Exception as exc:
         if isinstance(exc, (QueryError, EngineUnavailable)):
             raise
-        raise _query_error(exc, skipped, loaded, sql, chosen) from exc
+        raise _query_error(exc, skipped, loaded, sql, chosen, limits) from exc
+    more = max_rows is not None and len(rows) > max_rows
+    if more:
+        rows = rows[:max_rows]
     # sqlite compares TEXT with numbers without complaint, so warn instead.
     notes = type_hints(loaded, sql, chosen, label="note") if chosen is Engine.SQLITE else []
-    return QueryResult(columns, rows, chosen, skipped, notes)
+    return QueryResult(columns, rows, chosen, skipped, notes, more)
+
+
+@dataclass(frozen=True)
+class _Limits:
+    safe: bool = False
+    timeout: float | None = None
+    max_rows: int | None = None
+
+    def fetch(self, cursor: Any) -> list[list[Any]]:
+        """All rows, or ``max_rows + 1`` so the caller can tell there were more."""
+        fetched = (
+            cursor.fetchall() if self.max_rows is None else cursor.fetchmany(self.max_rows + 1)
+        )
+        return [list(row) for row in fetched]
 
 
 def _query_error(
@@ -128,8 +181,21 @@ def _query_error(
     loaded: Sequence[Table],
     sql: str,
     engine: Engine,
+    limits: _Limits | None = None,
 ) -> QueryError:
     message = str(exc).strip()
+    if (
+        limits is not None
+        and limits.safe
+        and re.search(r"not authorized|authorization denied", message, re.IGNORECASE)
+    ):
+        return QueryError(READ_ONLY_MESSAGE)
+    if (
+        limits is not None
+        and limits.timeout is not None
+        and re.search(r"\binterrupt", message, re.IGNORECASE)
+    ):
+        return QueryError(f"query stopped after {limits.timeout:g}s")
     match = _MISSING_TABLE_RE.search(message)
     if match:
         name = (match.group(1) or match.group(2)).lower()
@@ -235,7 +301,14 @@ def _quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def _run_sqlite(tables: Sequence[Table], sql: str) -> tuple[list[str], list[list[Any]]]:
+def _sqlite_authorizer(action: int, *_: object) -> int:
+    return sqlite3.SQLITE_OK if action in _SQLITE_ALLOWED else sqlite3.SQLITE_DENY
+
+
+def _run_sqlite(
+    tables: Sequence[Table], sql: str, limits: _Limits | None = None
+) -> tuple[list[str], list[list[Any]]]:
+    limits = limits or _Limits()
     connection = sqlite3.connect(":memory:")
     try:
         if not _strict_double_quotes(connection):
@@ -251,17 +324,27 @@ def _run_sqlite(tables: Sequence[Table], sql: str) -> tuple[list[str], list[list
                 f"INSERT INTO {_quote(table.sql_name)} VALUES ({placeholders})",
                 table.typed_rows(),
             )
+        connection.commit()
+        if limits.safe:
+            connection.set_authorizer(_sqlite_authorizer)
+        if limits.timeout is not None:
+            deadline = time.monotonic() + limits.timeout
+            connection.set_progress_handler(lambda: time.monotonic() > deadline, _PROGRESS_STEPS)
         cursor = connection.execute(sql)
         names = [d[0] for d in cursor.description or []]
-        return names, [list(row) for row in cursor.fetchall()]
+        return names, limits.fetch(cursor)
     finally:
         connection.close()
 
 
-def _run_duckdb(tables: Sequence[Table], sql: str) -> tuple[list[str], list[list[Any]]]:
+def _run_duckdb(
+    tables: Sequence[Table], sql: str, limits: _Limits | None = None
+) -> tuple[list[str], list[list[Any]]]:
     import duckdb  # ty: ignore[import-not-found]  (optional extra)
 
-    connection = duckdb.connect(":memory:")
+    limits = limits or _Limits()
+    config: dict[str, Any] = {"enable_external_access": False} if limits.safe else {}
+    connection = duckdb.connect(":memory:", config=config)
     try:
         for table in tables:
             columns = ", ".join(
@@ -275,8 +358,21 @@ def _run_duckdb(tables: Sequence[Table], sql: str) -> tuple[list[str], list[list
                     f"INSERT INTO {_quote(table.sql_name)} VALUES ({placeholders})",
                     table.typed_rows(),
                 )
-        cursor = connection.execute(sql)
-        names = [d[0] for d in cursor.description or []]
-        return names, [list(row) for row in cursor.fetchall()]
+        if limits.safe:
+            connection.execute("SET lock_configuration = true")
+            statements = connection.extract_statements(sql)
+            if any(st.type != duckdb.StatementType.SELECT for st in statements):
+                raise QueryError(READ_ONLY_MESSAGE)
+        timer = None
+        if limits.timeout is not None:
+            timer = threading.Timer(limits.timeout, connection.interrupt)
+            timer.start()
+        try:
+            cursor = connection.execute(sql)
+            names = [d[0] for d in cursor.description or []]
+            return names, limits.fetch(cursor)
+        finally:
+            if timer is not None:
+                timer.cancel()
     finally:
         connection.close()

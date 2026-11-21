@@ -210,14 +210,23 @@ def query(
     limit: int | None = None,
     full: bool = False,
     fmt: Format | str = Format.MD,
+    safe: bool = False,
+    timeout: float | None = None,
 ) -> Output:
-    """Run ``sql`` over the tables in ``sections`` (``t1``, ``t2``, ...)."""
+    """Run ``sql`` over the tables in ``sections`` (``t1``, ``t2``, ...).
+
+    ``safe`` allows only read-only queries and fetches no more than ``limit``
+    rows; see :func:`mdpeek.engines.run_query`.
+    """
     fmt = coerce(Format, fmt)
     found = doc.tables_in(sections)
     notes = [f"skipped {t.id} (not parsed: {t.error})" for t in found if not t.ok]
-    result = run_query(found, sql, engine)
+    cap_rows = None if full else (limit or DEFAULT_LIMIT)
+    result = run_query(
+        found, sql, engine, safe=safe, timeout=timeout, max_rows=cap_rows if safe else None
+    )
     notes += result.notes
-    cap = result.total if full else (limit or DEFAULT_LIMIT)
+    cap = result.total if cap_rows is None else cap_rows
     rows = result.rows[:cap]
     if fmt is Format.JSON:
         text = to_json(
@@ -231,4 +240,5 @@ def query(
         )
     else:
         text = format_rows(result.columns, rows, fmt)
-    return Output(text, notes, truncated=len(rows) < result.total, query=result, shown=len(rows))
+    truncated = len(rows) < result.total or result.more
+    return Output(text, notes, truncated=truncated, query=result, shown=len(rows))

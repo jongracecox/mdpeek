@@ -164,6 +164,7 @@ class Library:
         path: str | os.PathLike[str],
         include: Iterable[str] | None = None,
         exclude: Iterable[str] | None = None,
+        confine: bool = False,
     ) -> Library:
         """Scan the directory at ``path``.
 
@@ -171,11 +172,14 @@ class Library:
         case-insensitive). A path is excluded when an ``exclude`` glob matches
         its name or its path relative to the root; an excluded directory is
         not entered. Globs are case-sensitive; see :func:`glob_match`.
+        ``confine`` skips symlinked files that lead outside the directory.
         """
         root = Path(path)
         if not root.is_dir():
             raise NotADirectoryError(f"not a directory: {os.fspath(path)!r}")
-        scanner = _Scanner(root, list(include or ()), list(exclude or ()))
+        scanner = _Scanner(
+            root, list(include or ()), list(exclude or ()), root.resolve() if confine else None
+        )
         node = scanner.scan(root, "")
         if node is None:
             node = DirNode(root.name, root)
@@ -512,10 +516,14 @@ class _TreeOptions:
 
 
 class _Scanner:
-    def __init__(self, root: Path, include: list[str], exclude: list[str]) -> None:
+    def __init__(
+        self, root: Path, include: list[str], exclude: list[str], confine: Path | None = None
+    ) -> None:
         self.root = root
         self.include = include
         self.exclude = exclude
+        self.confine = confine
+        """The resolved root when files must stay inside it."""
         self.skipped: list[str] = []
 
     def _excluded(self, name: str, rel: str) -> bool:
@@ -554,6 +562,11 @@ class _Scanner:
         return node if node.dirs or node.files else None
 
     def _read(self, path: Path, name: str) -> FileNode | None:
+        if self.confine is not None:
+            real = path.resolve()
+            if real != self.confine and self.confine not in real.parents:
+                self.skipped.append(f"{path}: links outside the directory")
+                return None
         try:
             with open(path, encoding="utf-8", errors="replace", newline="") as handle:
                 return FileNode(name, path, handle.read())
