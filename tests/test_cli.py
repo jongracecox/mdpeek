@@ -37,3 +37,11 @@ def test_depth_must_be_a_number(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         main(["doc.md", "--depth", "two"])
     assert "must be a whole number" in capsys.readouterr().err
+
+
+def test_grep_lines_are_an_ops_option_the_cli_leaves_off(tmp_path, capsys):
+    from mdpeek import Document, ops
+
+    doc = Document.from_text("# A\nretry once\n")
+    assert ops.grep_file(doc, "retry", lines=1).text == "[S1] A (1 match)\n  > retry once\n"
+    assert ops.grep_file(doc, "retry").text == "[S1] A (1 match)\n"

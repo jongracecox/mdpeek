@@ -27,7 +27,7 @@ from mdpeek.library import DEFAULT_BUDGET, FileNode, Grouped, Library, TreeFit
 from mdpeek.meta import render_meta_list
 from mdpeek.model import Document
 from mdpeek.options import Engine, Format, coerce
-from mdpeek.search import compile_pattern, render_hits, section_hits
+from mdpeek.search import compile_pattern, render_matches, section_matches
 from mdpeek.table_output import (
     DEFAULT_LIMIT,
     Selection,
@@ -72,31 +72,45 @@ def tree(
     levels: int | None = None,
     depth: int | None = None,
     first: int | None = None,
+    summaries: bool = False,
 ) -> Output:
     """The directory tree: fixed when ``levels``, ``depth`` or ``first`` is
-    given without a budget, otherwise fitted to ``budget`` lines."""
+    given without a budget, otherwise fitted to ``budget`` lines. ``summaries``
+    adds each file's one-line summary."""
     notes = library_notes(library)
     if budget is None and any(v is not None for v in (levels, depth, first)):
-        return Output(library.tree(levels=levels, first=first, depth=depth), notes)
+        text = library.tree(levels=levels, first=first, depth=depth, summaries=summaries)
+        return Output(text, notes)
     budget = budget or DEFAULT_BUDGET
     fit = library.fit(budget, levels=levels, depth=depth, first=first)
-    text = library.tree(levels=fit.levels, first=fit.first, depth=fit.depth or None)
+    text = library.tree(
+        levels=fit.levels, first=fit.first, depth=fit.depth or None, summaries=summaries
+    )
     return Output(text, notes, truncated=bool(fit.next_step) or fit.lines > budget, fit=fit)
 
 
-def grep_file(doc: Document, pattern: str, sections: Sequence[str] | None = None) -> Output:
-    """Sections of ``doc`` with lines matching ``pattern``."""
-    hits = section_hits(doc, compile_pattern(pattern), sections)
-    notes = [] if hits else [f"grep: no matches for {pattern!r}"]
-    return Output(render_hits(hits), notes)
+def grep_file(
+    doc: Document, pattern: str, sections: Sequence[str] | None = None, *, lines: int = 0
+) -> Output:
+    """Sections of ``doc`` with lines matching ``pattern``; ``lines`` shows up to
+    that many matching lines under each."""
+    found = section_matches(doc, compile_pattern(pattern), sections)
+    notes = [] if found else [f"grep: no matches for {pattern!r}"]
+    return Output(render_matches(found, lines), notes)
 
 
 def grep_library(
-    library: Library, pattern: str, *, first: int | None = None, budget: int | None = None
+    library: Library,
+    pattern: str,
+    *,
+    first: int | None = None,
+    budget: int | None = None,
+    lines: int = 0,
 ) -> Output:
-    """Matching sections across a directory, files with most matches first."""
+    """Matching sections across a directory, files with most matches first;
+    ``lines`` shows up to that many matching lines under each section."""
     notes = library_notes(library)
-    result = library.grep(compile_pattern(pattern), first=first, budget=budget)
+    result = library.grep(compile_pattern(pattern), first=first, budget=budget, lines=lines)
     if not result.files:
         notes.append(f"grep: no matches for {pattern!r}")
     return Output(result.text, notes, truncated=_held_back(result, budget, first), grouped=result)

@@ -34,7 +34,7 @@ from functools import cache, cached_property
 from pathlib import Path
 
 from mdpeek.model import Document, Section
-from mdpeek.search import hit_line, matches, section_hits
+from mdpeek.search import hit_line, matches, section_matches, snippets
 from mdpeek.units import count
 
 INDENT = "  "
@@ -54,18 +54,24 @@ class Title:
     text: str
     extra: int = 0
     """Further top-level headings not shown in the label."""
+    from_meta: bool = False
+    """The title came from front matter, not a heading."""
 
     @property
     def collapsed(self) -> bool:
         """True when the title is the file's only top-level heading."""
-        return self.extra == 0
+        return not self.from_meta and self.extra == 0
 
     def __str__(self) -> str:
         return f"{self.text} +{self.extra}" if self.extra else self.text
 
 
 def title_of(doc: Document) -> Title | None:
-    """The title of ``doc``, or ``None`` if it has no headings.
+    """The title of ``doc``: its front matter ``title``, else its first top-level
+    heading; ``None`` if it has neither.
+
+    >>> str(title_of(Document.from_text("---\\ntitle: Venues\\n---\\n## Schema\\n## Keys\\n")))
+    'Venues'
 
     >>> str(title_of(Document.from_text("intro\\n# Guide\\n## Install\\n")))
     'Guide'
@@ -74,10 +80,69 @@ def title_of(doc: Document) -> Title | None:
     >>> title_of(Document.from_text("no headings\\n")) is None
     True
     """
+    meta_title = doc.meta.value("title") if doc.meta is not None else None
+    if meta_title:
+        return Title(meta_title, from_meta=True)
     top = [s for s in doc.sections if not s.is_preamble]
     if not top:
         return None
     return Title(top[0].title, len(top) - 1)
+
+
+SUMMARY_CHARS = 160
+_NOT_PROSE = ("#", "|", "```", "~~~", "<", ">", "-", "*", "+", "!")
+_LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z`(])")
+
+
+def summary_of(doc: Document) -> str | None:
+    """A one-line summary: front matter ``summary`` or ``description``, else the
+    first sentence of the first paragraph (links reduced to their text), else
+    the first few section headings; cut to about 160 characters.
+
+    >>> summary_of(Document.from_text("---\\nsummary: Store rows.\\n---\\n# S\\n"))
+    'Store rows.'
+    >>> summary_of(Document.from_text("# Guide\\n\\nInstall it\\nfirst. Then run.\\n"))
+    'Install it first.'
+    >>> summary_of(Document.from_text("# Runbook\\n\\nFor the fix [PR #9](https://x/9) needs.\\n"))
+    'For the fix PR #9 needs.'
+    >>> summary_of(Document.from_text("# T\\n## Setup\\n- a\\n## Use\\n- b\\n"))
+    'Covers: Setup; Use'
+    >>> summary_of(Document.from_text("# Only a heading\\n")) is None
+    True
+    """
+    if doc.meta is not None:
+        for key in ("summary", "description"):
+            value = doc.meta.value(key)
+            if value:
+                return _clip(value)
+    start = doc.meta.end if doc.meta is not None else 0
+    in_fence = False
+    paragraph: list[str] = []
+    for raw in doc.lines[start:]:
+        line = raw.strip()
+        if line.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            if paragraph:
+                break
+            continue
+        if in_fence:
+            continue
+        numbered = bool(line) and line[0].isdigit() and ". " in line[:4]
+        if line and not numbered and not line.startswith(_NOT_PROSE):
+            paragraph.append(line)
+        elif paragraph:
+            break
+    if paragraph:
+        text = _LINK.sub(r"\1", " ".join(paragraph)).replace("**", "")
+        return _clip(_SENTENCE_END.split(text, maxsplit=1)[0])
+    headings = [s.title for s in doc.walk() if not s.is_preamble][1:5]
+    return _clip("Covers: " + "; ".join(headings)) if headings else None
+
+
+def _clip(text: str) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= SUMMARY_CHARS else text[: SUMMARY_CHARS - 1].rstrip() + "…"
 
 
 @dataclass(eq=False)
@@ -99,6 +164,10 @@ class FileNode:
     @cached_property
     def title(self) -> Title | None:
         return title_of(self.doc)
+
+    @cached_property
+    def summary(self) -> str | None:
+        return summary_of(self.doc)
 
     def section_count(self) -> int:
         """Headings in the file, not counting a collapsed title."""
@@ -193,13 +262,15 @@ class Library:
         levels: int | None = None,
         first: int | None = None,
         depth: int | None = None,
+        summaries: bool = False,
     ) -> str:
         """The tree, expanding ``levels`` directory levels (default 1).
 
         ``depth`` lists each shown file's headings down to that depth,
         counted below a collapsed title (default: none). ``first`` shows only
         the first N entries of each directory and the first N sections under
-        each heading; the rest are summarised on one line. Raises
+        each heading; the rest are summarised on one line. ``summaries`` adds
+        each file's one-line summary (:func:`summary_of`) to its line. Raises
         ``ValueError`` for values below 1.
         """
         levels = DEFAULT_LEVELS if levels is None else levels
@@ -207,7 +278,7 @@ class Library:
             if value is not None and value < 1:
                 raise ValueError(f"{name} must be at least 1, got {value}")
         out = [_dir_line(self.root, self.display)]
-        _render_entries(self.root, 1, _TreeOptions(levels, first, depth or 0), out)
+        _render_entries(self.root, 1, _TreeOptions(levels, first, depth or 0, summaries), out)
         return "".join(f"{line}\n" for line in out)
 
     def fit(
@@ -266,16 +337,20 @@ class Library:
         regex: re.Pattern[str],
         first: int | None = None,
         budget: int | None = None,
+        lines: int = 0,
     ) -> Grouped:
         """Matching sections, grouped by file, the files with most matches first.
 
-        See :meth:`grouped` for ``first`` and ``budget``.
+        ``lines`` shows up to that many matching lines under each section. See
+        :meth:`grouped` for ``first`` and ``budget``.
         """
         groups: list[_Group] = []
         for node in self._files():
-            hits = section_hits(node.doc, regex)
-            if hits:
-                children = [(hit_line(s, n), n) for s, n in hits]
+            found = section_matches(node.doc, regex)
+            if found:
+                children = [
+                    (hit_line(s, len(m)) + snippets(m, lines, INDENT * 3), len(m)) for s, m in found
+                ]
                 groups.append(_Group(self.relative(node), node, children))
         groups.sort(key=lambda g: (-g.count, g.rel))
         return self.grouped(groups, matches, "section", first, budget)
@@ -513,6 +588,7 @@ class _TreeOptions:
     levels: int
     first: int | None
     depth: int
+    summaries: bool = False
 
 
 class _Scanner:
@@ -640,7 +716,7 @@ def _dir_line(node: DirNode, name: str) -> str:
     return _labelled(name, node.title, details)
 
 
-def _file_line(node: FileNode) -> str:
+def _file_line(node: FileNode, summaries: bool = False) -> str:
     details = [count(node.line_count, "line")]
     sections = node.section_count()
     if sections:
@@ -649,7 +725,10 @@ def _file_line(node: FileNode) -> str:
         details.append(count(len(node.doc.tables), "table"))
     if node.doc.diagrams:
         details.append(count(len(node.doc.diagrams), "diagram"))
-    return _labelled(node.name, node.title, details)
+    line = _labelled(node.name, node.title, details)
+    if summaries and node.summary:
+        line += f" — {node.summary}"
+    return line
 
 
 def _render_entries(node: DirNode, indent_level: int, opts: _TreeOptions, out: list[str]) -> None:
@@ -658,7 +737,7 @@ def _render_entries(node: DirNode, indent_level: int, opts: _TreeOptions, out: l
     shown = entries if opts.first is None else entries[: opts.first]
     for entry in shown:
         if isinstance(entry, FileNode):
-            out.append(indent + _file_line(entry))
+            out.append(indent + _file_line(entry, opts.summaries))
             if opts.depth:
                 _render_headings(entry, heading_roots(entry.doc), indent_level + 1, 1, opts, out)
             continue
