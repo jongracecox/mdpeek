@@ -10,55 +10,55 @@ Feature: Directories
     When I run "mdpeek docs -L 1"
     Then the output is:
       """
-      docs/ Handbook (9 files, 3 dirs, 37 lines)
-        README.md Handbook (2 lines)
-        guides/ Guides (4 files, 1 dir, 16 lines)
-        reference/ (2 files, 8 lines)
-        changelog.md Changelog (5 lines, 2 sections)
-        notes.md Part one +2 (6 lines, 3 sections)
+      docs/ Handbook (9 files, 3 dirs, 37 ln)
+        README.md Handbook (2 ln)
+        guides/ Guides (4 files, 1 dir, 16 ln)
+        reference/ (2 files, 8 ln)
+        changelog.md Changelog (5 ln, 2 sec)
+        notes.md Part one +2 (6 ln, 3 sec)
       """
 
   Scenario: Levels expand subdirectories
     When I run "mdpeek docs/ --levels 2"
     Then the output is:
       """
-      docs/ Handbook (9 files, 3 dirs, 37 lines)
-        README.md Handbook (2 lines)
-        guides/ Guides (4 files, 1 dir, 16 lines)
-          README.md Guides (2 lines)
-          advanced/ (1 file, 2 lines)
-          deploy.md Deploy (7 lines, 1 table)
-          install.md Install (5 lines, 2 sections)
-        reference/ (2 files, 8 lines)
-          api.md API (6 lines, 3 sections)
-          glossary.md (2 lines)
-        changelog.md Changelog (5 lines, 2 sections)
-        notes.md Part one +2 (6 lines, 3 sections)
+      docs/ Handbook (9 files, 3 dirs, 37 ln)
+        README.md Handbook (2 ln)
+        guides/ Guides (4 files, 1 dir, 16 ln)
+          README.md Guides (2 ln)
+          advanced/ (1 file, 2 ln)
+          deploy.md Deploy (7 ln, 1 tbl)
+          install.md Install (5 ln, 2 sec)
+        reference/ (2 files, 8 ln)
+          api.md API (6 ln, 3 sec)
+          glossary.md (2 ln)
+        changelog.md Changelog (5 ln, 2 sec)
+        notes.md Part one +2 (6 ln, 3 sec)
       """
 
   Scenario: First limits the entries shown in each directory
     When I run "mdpeek docs -L 2 -n 2"
     Then the output is:
       """
-      docs/ Handbook (9 files, 3 dirs, 37 lines)
-        README.md Handbook (2 lines)
-        guides/ Guides (4 files, 1 dir, 16 lines)
-          README.md Guides (2 lines)
-          advanced/ (1 file, 2 lines)
-          … 2 more (2 files, 12 lines)
-        … 3 more (1 dir, 2 files, 19 lines)
+      docs/ Handbook (9 files, 3 dirs, 37 ln)
+        README.md Handbook (2 ln)
+        guides/ Guides (4 files, 1 dir, 16 ln)
+          README.md Guides (2 ln)
+          advanced/ (1 file, 2 ln)
+          … 2 more (2 files, 12 ln)
+        … 3 more (1 dir, 2 files, 19 ln)
       """
 
   Scenario: Opening a subdirectory
     When I run "mdpeek docs/guides --levels 2"
     Then the output is:
       """
-      docs/guides/ Guides (4 files, 1 dir, 16 lines)
-        README.md Guides (2 lines)
-        advanced/ (1 file, 2 lines)
-          tuning.md Tuning (2 lines)
-        deploy.md Deploy (7 lines, 1 table)
-        install.md Install (5 lines, 2 sections)
+      docs/guides/ Guides (4 files, 1 dir, 16 ln)
+        README.md Guides (2 ln)
+        advanced/ (1 file, 2 ln)
+          tuning.md Tuning (2 ln)
+        deploy.md Deploy (7 ln, 1 tbl)
+        install.md Install (5 ln, 2 sec)
       """
 
   Scenario: A file's only top-level heading is its title
@@ -73,8 +73,8 @@ Feature: Directories
     When I run "mdpeek notes -L 1"
     Then the output is:
       """
-      notes/ (1 file, 5 lines)
-        one.md Release notes (5 lines, 2 sections)
+      notes/ (1 file, 5 ln)
+        one.md Release notes (5 ln, 2 sec)
       """
 
   Scenario: An index file titles its directory
@@ -89,9 +89,9 @@ Feature: Directories
     When I run "mdpeek site"
     Then the output is:
       """
-      site/ Site (2 files, 2 lines)
-        index.md Site (1 line)
-        about.md About (1 line)
+      site/ Site (2 files, 2 ln)
+        index.md Site (1 ln)
+        about.md About (1 ln)
       """
 
   Scenario: Hidden, tool and markdown-free directories are skipped
@@ -114,32 +114,32 @@ Feature: Directories
     When I run "mdpeek repo"
     Then the output is:
       """
-      repo/ (1 file, 1 line)
-        guide.md Guide (1 line)
+      repo/ (1 file, 1 ln)
+        guide.md Guide (1 ln)
       """
 
   Scenario: Exclude skips files and directories by name or path
     When I run "mdpeek docs -L 2 --exclude reference --exclude 'guides/*.md'"
     Then the output is:
       """
-      docs/ Handbook (4 files, 2 dirs, 15 lines)
-        README.md Handbook (2 lines)
-        guides/ (1 file, 1 dir, 2 lines)
-          advanced/ (1 file, 2 lines)
-        changelog.md Changelog (5 lines, 2 sections)
-        notes.md Part one +2 (6 lines, 3 sections)
+      docs/ Handbook (4 files, 2 dirs, 15 ln)
+        README.md Handbook (2 ln)
+        guides/ (1 file, 1 dir, 2 ln)
+          advanced/ (1 file, 2 ln)
+        changelog.md Changelog (5 ln, 2 sec)
+        notes.md Part one +2 (6 ln, 3 sec)
       """
 
   Scenario: Include replaces the default markdown patterns
     When I run "mdpeek docs -L 3 --include 'tuning.*' --include '*.txt'"
     Then the output is:
       """
-      docs/ (2 files, 3 dirs, 3 lines)
-        assets/ (1 file, 1 line)
-          logo.txt (1 line)
-        guides/ (1 file, 1 dir, 2 lines)
-          advanced/ (1 file, 2 lines)
-            tuning.md Tuning (2 lines)
+      docs/ (2 files, 3 dirs, 3 ln)
+        assets/ (1 file, 1 ln)
+          logo.txt (1 ln)
+        guides/ (1 file, 1 dir, 2 ln)
+          advanced/ (1 file, 2 ln)
+            tuning.md Tuning (2 ln)
       """
 
   Scenario: A directory with no markdown
@@ -178,25 +178,25 @@ Feature: Directories
     When I run "mdpeek docs -L 2 -d 1"
     Then the output is:
       """
-      docs/ Handbook (9 files, 3 dirs, 37 lines)
-        README.md Handbook (2 lines)
-        guides/ Guides (4 files, 1 dir, 16 lines)
-          README.md Guides (2 lines)
-          advanced/ (1 file, 2 lines)
-          deploy.md Deploy (7 lines, 1 table)
-          install.md Install (5 lines, 2 sections)
+      docs/ Handbook (9 files, 3 dirs, 37 ln)
+        README.md Handbook (2 ln)
+        guides/ Guides (4 files, 1 dir, 16 ln)
+          README.md Guides (2 ln)
+          advanced/ (1 file, 2 ln)
+          deploy.md Deploy (7 ln, 1 tbl)
+          install.md Install (5 ln, 2 sec)
             [S1.1] Linux (1)
             [S1.2] macOS (1)
-        reference/ (2 files, 8 lines)
-          api.md API (6 lines, 3 sections)
+        reference/ (2 files, 8 ln)
+          api.md API (6 ln, 3 sec)
             [S1.1] List (0)
             [S1.2] Create (0)
             [S1.3] Delete (0)
-          glossary.md (2 lines)
-        changelog.md Changelog (5 lines, 2 sections)
+          glossary.md (2 ln)
+        changelog.md Changelog (5 ln, 2 sec)
           [S1.1] 1.1 (1)
           [S1.2] 1.0 (1)
-        notes.md Part one +2 (6 lines, 3 sections)
+        notes.md Part one +2 (6 ln, 3 sec)
           [S1] Part one (1)
           [S2] Part two (1)
           [S3] Part three (1)
@@ -216,13 +216,13 @@ Feature: Directories
     When I run "mdpeek manual -d 2 -n 2"
     Then the output is:
       """
-      manual/ (1 file, 7 lines)
-        guide.md Guide (7 lines, 6 sections)
+      manual/ (1 file, 7 ln)
+        guide.md Guide (7 ln, 6 sec)
           [S1.1] One (0)
             [S1.1.1] One A (0)
             [S1.1.2] One B (0)
           [S1.2] Two (0)
-          … 2 more (2 sections, 2 lines)
+          … 2 more (2 sec, 2 ln)
       """
 
   Scenario: Depth stops at the limit and counts the hidden subsections
@@ -235,8 +235,8 @@ Feature: Directories
     When I run "mdpeek manual -d 1"
     Then the output is:
       """
-      manual/ (1 file, 3 lines)
-        guide.md Guide (3 lines, 2 sections)
+      manual/ (1 file, 3 ln)
+        guide.md Guide (3 ln, 2 sec)
           [S1.1] One (0, 1 sub)
       """
 
@@ -274,7 +274,7 @@ Feature: Directories
     Then the output is:
       """
       ==> guides/deploy.md <==
-      [T1] S1 table 2 cols × 2 rows
+      [T1] S1 2×2
       columns: env TEXT, url TEXT
       | env | url |
       |---|---|
@@ -327,9 +327,9 @@ Feature: Directories
     When I run "mdpeek flows -d 1"
     Then the output is:
       """
-      flows/ (1 file, 10 lines)
-        orders.md Orders (10 lines, 2 sections, 1 diagram)
-          [S1.1] Flow (4, 1 diagram)
+      flows/ (1 file, 10 ln)
+        orders.md Orders (10 ln, 2 sec, 1 diag)
+          [S1.1] Flow (4, 1 diag)
           [S1.2] Setup (3)
       """
 
@@ -371,14 +371,14 @@ Feature: Directories
     Then the output is:
       """
       ==> orders.md <==
-      [D1] S1 mermaid flowchart (2 lines)
+      [D1] S1 mermaid flowchart (2 ln)
       ```mermaid
       flowchart LR
           A --> B
       ```
 
       ==> billing.md <==
-      [D1] S1 graphviz digraph (1 line)
+      [D1] S1 graphviz digraph (1 ln)
       ```dot
       digraph G { a -> b }
       ```
@@ -417,26 +417,26 @@ Feature: Directories
     When I run "mdpeek docs"
     Then the output is:
       """
-      docs/ Handbook (9 files, 3 dirs, 37 lines)
-        README.md Handbook (2 lines)
-        guides/ Guides (4 files, 1 dir, 16 lines)
-          README.md Guides (2 lines)
-          advanced/ (1 file, 2 lines)
-            tuning.md Tuning (2 lines)
-          deploy.md Deploy (7 lines, 1 table)
-          install.md Install (5 lines, 2 sections)
+      docs/ Handbook (9 files, 3 dirs, 37 ln)
+        README.md Handbook (2 ln)
+        guides/ Guides (4 files, 1 dir, 16 ln)
+          README.md Guides (2 ln)
+          advanced/ (1 file, 2 ln)
+            tuning.md Tuning (2 ln)
+          deploy.md Deploy (7 ln, 1 tbl)
+          install.md Install (5 ln, 2 sec)
             [S1.1] Linux (1)
             [S1.2] macOS (1)
-        reference/ (2 files, 8 lines)
-          api.md API (6 lines, 3 sections)
+        reference/ (2 files, 8 ln)
+          api.md API (6 ln, 3 sec)
             [S1.1] List (0)
             [S1.2] Create (0)
             [S1.3] Delete (0)
-          glossary.md (2 lines)
-        changelog.md Changelog (5 lines, 2 sections)
+          glossary.md (2 ln)
+        changelog.md Changelog (5 ln, 2 sec)
           [S1.1] 1.1 (1)
           [S1.2] 1.0 (1)
-        notes.md Part one +2 (6 lines, 3 sections)
+        notes.md Part one +2 (6 ln, 3 sec)
           [S1] Part one (1)
           [S2] Part two (1)
           [S3] Part three (1)
@@ -446,65 +446,65 @@ Feature: Directories
     When I run "mdpeek docs --budget 13"
     Then the output is:
       """
-      docs/ Handbook (9 files, 3 dirs, 37 lines)
-        README.md Handbook (2 lines)
-        guides/ Guides (4 files, 1 dir, 16 lines)
-          README.md Guides (2 lines)
-          advanced/ (1 file, 2 lines)
-            tuning.md Tuning (2 lines)
-          deploy.md Deploy (7 lines, 1 table)
-          install.md Install (5 lines, 2 sections)
-        reference/ (2 files, 8 lines)
-          api.md API (6 lines, 3 sections)
-          glossary.md (2 lines)
-        changelog.md Changelog (5 lines, 2 sections)
-        notes.md Part one +2 (6 lines, 3 sections)
+      docs/ Handbook (9 files, 3 dirs, 37 ln)
+        README.md Handbook (2 ln)
+        guides/ Guides (4 files, 1 dir, 16 ln)
+          README.md Guides (2 ln)
+          advanced/ (1 file, 2 ln)
+            tuning.md Tuning (2 ln)
+          deploy.md Deploy (7 ln, 1 tbl)
+          install.md Install (5 ln, 2 sec)
+        reference/ (2 files, 8 ln)
+          api.md API (6 ln, 3 sec)
+          glossary.md (2 ln)
+        changelog.md Changelog (5 ln, 2 sec)
+        notes.md Part one +2 (6 ln, 3 sec)
       """
     And stderr contains:
       """
-      mdpeek: tree: showing -L 3 to fit --budget 13; -d 1 is 23 lines
+      mdpeek: tree: showing -L 3 to fit --budget 13; -d 1 is 23 ln
       """
 
   Scenario: A small budget limits the entries shown
     When I run "mdpeek docs --budget 4"
     Then the output is:
       """
-      docs/ Handbook (9 files, 3 dirs, 37 lines)
-        README.md Handbook (2 lines)
-        guides/ Guides (4 files, 1 dir, 16 lines)
-        … 3 more (1 dir, 2 files, 19 lines)
+      docs/ Handbook (9 files, 3 dirs, 37 ln)
+        README.md Handbook (2 ln)
+        guides/ Guides (4 files, 1 dir, 16 ln)
+        … 3 more (1 dir, 2 files, 19 ln)
       """
     And stderr contains:
       """
-      mdpeek: tree: showing -L 1 -n 2 to fit --budget 4; -L 2 is 7 lines
+      mdpeek: tree: showing -L 1 -n 2 to fit --budget 4; -L 2 is 7 ln
       """
 
   Scenario: Options given with a budget stay fixed
     When I run "mdpeek docs --budget 5 -d 1"
     Then the output is:
       """
-      docs/ Handbook (9 files, 3 dirs, 37 lines)
-        README.md Handbook (2 lines)
-        guides/ Guides (4 files, 1 dir, 16 lines)
-        reference/ (2 files, 8 lines)
-        … 2 more (2 files, 11 lines)
+      docs/ Handbook (9 files, 3 dirs, 37 ln)
+        README.md Handbook (2 ln)
+        guides/ Guides (4 files, 1 dir, 16 ln)
+        reference/ (2 files, 8 ln)
+        … 2 more (2 files, 11 ln)
       """
     And stderr contains:
       """
-      mdpeek: tree: showing -L 1 -d 1 -n 3 to fit --budget 5; -L 2 is 14 lines
+      mdpeek: tree: showing -L 1 -d 1 -n 3 to fit --budget 5; -L 2 is 14 ln
       """
 
   Scenario: When nothing fits, the smallest tree is shown
     When I run "mdpeek docs --budget 2"
     Then the output is:
       """
-      docs/ Handbook (9 files, 3 dirs, 37 lines)
-        README.md Handbook (2 lines)
-        … 4 more (2 dirs, 2 files, 35 lines)
+      docs/ Handbook (9 files, 3 dirs, 37 ln)
+        README.md Handbook (2 ln)
+        … 4 more (2 dirs, 2 files, 35 ln)
       """
     And stderr contains:
       """
-      mdpeek: tree: -L 1 -n 1 is 3 lines, the smallest tree, over --budget 2
+      mdpeek: tree: -L 1 -n 1 is 3 ln, the smallest tree, over --budget 2
       """
 
   Scenario: The budget only applies to the tree
@@ -536,7 +536,7 @@ Feature: Directories
       docs/ (4 matches in 3 files)
         guides/install.md Install (2 matches)
           [S1.1] Linux (1 match)
-          … 1 more (1 section, 1 match)
+          … 1 more (1 sec, 1 match)
         … 2 more (2 files, 2 matches)
       """
 
@@ -547,7 +547,7 @@ Feature: Directories
       docs/ (4 matches in 3 files)
         guides/install.md Install (2 matches)
           [S1.1] Linux (1 match)
-          … 1 more (1 section, 1 match)
+          … 1 more (1 sec, 1 match)
         … 2 more (2 files, 2 matches)
       """
     And stderr contains:
@@ -595,9 +595,9 @@ Feature: Directories
     When I run "mdpeek docs --tables"
     Then the output is:
       """
-      docs/ (1 table in 1 file)
-        guides/deploy.md Deploy (1 table)
-          [T1] S1 table 2 cols × 2 rows: env, url
+      docs/ (1 tbl in 1 file)
+        guides/deploy.md Deploy (1 tbl)
+          [T1] S1 2×2: env, url
       """
 
   Scenario: Listed items as JSON lines carry their path
@@ -631,20 +631,20 @@ Feature: Directories
     When I run "mdpeek flows --fences"
     Then the output is:
       """
-      flows/ (3 fenced blocks in 2 files)
-        billing.md Billing (1 fenced block)
-          [F1] S1 dot (1 line) = D1
-        orders.md Orders (2 fenced blocks)
-          [F1] S1.1 mermaid (2 lines) = D1
-          [F2] S1.2 sh (1 line)
+      flows/ (3 fences in 2 files)
+        billing.md Billing (1 fence)
+          [F1] S1 dot (1 ln) = D1
+        orders.md Orders (2 fences)
+          [F1] S1.1 mermaid (2 ln) = D1
+          [F2] S1.2 sh (1 ln)
       """
     When I run "mdpeek flows --diagrams --budget 4"
     Then the output is:
       """
-      flows/ (2 diagrams in 2 files)
-        billing.md Billing (1 diagram)
-          [D1] S1 graphviz digraph (1 line)
-        … 1 more (1 file, 1 diagram)
+      flows/ (2 diag in 2 files)
+        billing.md Billing (1 diag)
+          [D1] S1 graphviz digraph (1 ln)
+        … 1 more (1 file, 1 diag)
       """
     And stderr contains:
       """
@@ -655,7 +655,7 @@ Feature: Directories
     When I run "mdpeek docs --diagrams"
     Then the output is:
       """
-      docs/ (0 diagrams)
+      docs/ (0 diag)
       """
 
   Scenario Outline: Listing options on a directory

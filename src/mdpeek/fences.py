@@ -20,6 +20,7 @@ from markdown_it.token import Token
 from mdpeek.diagrams import Diagram
 from mdpeek.formats import to_json
 from mdpeek.options import Format, coerce
+from mdpeek.units import count as count_of
 
 
 class FenceNotFound(KeyError):
@@ -91,13 +92,13 @@ def build_fences(
 
 
 def summary(fence: Fence, *, with_section: bool = True) -> str:
-    """One line, e.g. ``[F4] S1.6.2 mermaid (19 lines) = D1``."""
+    """One line, e.g. ``[F4] S1.6.2 mermaid (19 ln) = D1``."""
     parts = [f"[{fence.id}]"]
     if with_section:
         parts.append(fence.section_id)
     parts.append(fence.language or "plain")
     count = fence.line_count
-    parts.append(f"({count} line)" if count == 1 else f"({count} lines)")
+    parts.append(f"({count_of(count, 'line')})")
     if fence.diagram_id:
         parts.append(f"= {fence.diagram_id}")
     return " ".join(parts)

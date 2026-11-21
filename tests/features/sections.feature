@@ -21,7 +21,7 @@ Feature: Selecting sections
       """
       [S1.1] Setup
       Install it.
-        [S1.1.1] Linux (1 line)
+        [S1.1.1] Linux (1 ln)
       """
 
   Scenario: Several sections keep the order they were given

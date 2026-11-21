@@ -46,8 +46,8 @@ def test_describe(language, source, expected):
 
 
 def test_summaries(doc):
-    assert summary(doc.diagram("D1")) == '[D1] mermaid flowchart "Order flow" (6 lines)'
-    assert summary(doc.diagram("D4"), with_section=True) == "[D4] S1.1 d2 (1 line)"
+    assert summary(doc.diagram("D1")) == '[D1] mermaid flowchart "Order flow" (6 ln)'
+    assert summary(doc.diagram("D4"), with_section=True) == "[D4] S1.1 d2 (1 ln)"
 
 
 def test_unknown_diagram(doc):
@@ -68,14 +68,14 @@ def test_view_replaces_diagrams_and_counts_them(doc):
         "[S1] Diagrams",
         "Intro.",
         "",
-        '[D1] mermaid flowchart "Order flow" (6 lines)',
+        '[D1] mermaid flowchart "Order flow" (6 ln)',
         "",
         "```python",
         "# a code block, not a diagram",
         'print("hi")',
         "```",
     ]
-    assert "  [S1.1] Other languages (22 lines, 4 diagrams)" in doc.view().splitlines()
+    assert "  [S1.1] Other languages (22 ln, 4 diag)" in doc.view().splitlines()
 
 
 def test_diagrams_inline_on_request(doc):
@@ -87,8 +87,8 @@ def test_output_formats(doc):
     d1 = doc.diagram("D1")
     assert render_diagrams([d1], "md") == d1.source  # one diagram: bare source
     several = render_diagrams(doc.diagrams[:2], "md")
-    assert several.startswith('[D1] S1 mermaid flowchart "Order flow" (6 lines)\n```mermaid\n---\n')
-    assert "\n\n[D2] S1.1 graphviz digraph (3 lines)\n~~~ dot\n" in several
+    assert several.startswith('[D1] S1 mermaid flowchart "Order flow" (6 ln)\n```mermaid\n---\n')
+    assert "\n\n[D2] S1.1 graphviz digraph (3 ln)\n~~~ dot\n" in several
     data = json.loads(render_diagrams([d1], "json"))
     assert data["source"].startswith("---\ntitle: Order flow")
     assert len(json.loads(render_diagrams(doc.diagrams[:2], "json"))) == 2

@@ -4,7 +4,7 @@
 >>> print(doc.view(), end="")
 [S1] Guide
 Hello.
-  [S1.1] Install (1 line)
+  [S1.1] Install (1 ln)
 """
 
 from importlib.metadata import PackageNotFoundError, version

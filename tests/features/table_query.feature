@@ -26,7 +26,7 @@ Feature: Showing tables on demand
     When I run "mdpeek doc.md --table T1"
     Then the output is:
       """
-      [T1] S1 table 4 cols × 7 rows
+      [T1] S1 4×7
       columns: id INTEGER, item_name TEXT, qty INTEGER, price REAL
       | id | item_name | qty | price |
       |---|---|---|---|
@@ -45,7 +45,7 @@ Feature: Showing tables on demand
     When I run "mdpeek doc.md --table T1 --full --cols id"
     Then the output is:
       """
-      [T1] S1 table 4 cols × 7 rows
+      [T1] S1 4×7
       columns: id INTEGER
       | id |
       |---|
@@ -62,7 +62,7 @@ Feature: Showing tables on demand
     When I run "mdpeek doc.md --table t1 --rows 6- --cols 'item name,price'"
     Then the output is:
       """
-      [T1] S1 table 4 cols × 7 rows
+      [T1] S1 4×7
       columns: item_name TEXT, price REAL
       | item_name | price |
       |---|---|
@@ -89,15 +89,15 @@ Feature: Showing tables on demand
     When I run "mdpeek doc.md --tables"
     Then the output is:
       """
-      [T1] S1 table 4 cols × 7 rows: id, item_name, qty, price
-      [T2] S1.1 table 2 cols × 1 row: name, city
+      [T1] S1 4×7: id, item_name, qty, price
+      [T2] S1.1 2×1: name, city
       """
 
   Scenario: Original headers on request
     When I run "mdpeek doc.md --table T1 --rows 1 --raw-column-names"
     Then the output is:
       """
-      [T1] S1 table 4 cols × 7 rows
+      [T1] S1 4×7
       columns: id INTEGER, item_name TEXT ("Item Name"), qty INTEGER, price REAL
       | ID | Item Name | Qty | Price |
       |---|---|---|---|
@@ -108,27 +108,27 @@ Feature: Showing tables on demand
     When I run "mdpeek doc.md --tables --raw-column-names -s S1"
     Then the output contains:
       """
-      [T1] S1 table 4 cols × 7 rows: ID, Item Name, Qty, Price
+      [T1] S1 4×7: ID, Item Name, Qty, Price
       """
 
   Scenario: Listing is scoped by section
     When I run "mdpeek doc.md --tables -s S1.1"
     Then the output is:
       """
-      [T2] S1.1 table 2 cols × 1 row: name, city
+      [T2] S1.1 2×1: name, city
       """
 
   Scenario: Several tables in full
     When I run "mdpeek doc.md --table T2 --table T1 --rows 1"
     Then the output is:
       """
-      [T2] S1.1 table 2 cols × 1 row
+      [T2] S1.1 2×1
       columns: name TEXT, city TEXT
       | name | city |
       |---|---|
       | Acme | Springfield |
 
-      [T1] S1 table 4 cols × 7 rows
+      [T1] S1 4×7
       columns: id INTEGER, item_name TEXT, qty INTEGER, price REAL
       | id | item_name | qty | price |
       |---|---|---|---|

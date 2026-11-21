@@ -17,7 +17,7 @@ Front matter is never shown inline: a whole-document render starts with a
 >>> print(render(doc), end="")
 [S1] A
 Intro.
-  [S1.1] B (2 lines)
+  [S1.1] B (2 ln)
 >>> print(render(doc, Mode.STRUCTURE), end="")
 [S1] A (1)
   [S1.1] B (2)
@@ -33,6 +33,7 @@ from mdpeek.diagrams import summary as diagram_summary
 from mdpeek.model import Document, Section
 from mdpeek.options import Mode, OnTableError, coerce
 from mdpeek.tables import Table, TableSettings, should_summarise, summary
+from mdpeek.units import count
 
 INDENT = "  "
 DEFAULT_VIEW_DEPTH = 1
@@ -123,8 +124,7 @@ def _label(section: Section) -> str:
 
 
 def _stub(ctx: _Context, section: Section) -> str:
-    lines = section.body_line_count(ctx.doc.lines)
-    details = [f"{lines} line" if lines == 1 else f"{lines} lines"]
+    details = [count(section.body_line_count(ctx.doc.lines), "line")]
     if section.children:
         details.append(f"{len(section.children)} sub")
     details.extend(_table_count(ctx, section))
@@ -134,12 +134,12 @@ def _stub(ctx: _Context, section: Section) -> str:
 def _table_count(ctx: _Context, section: Section) -> list[str]:
     """Counts of the tables and diagrams in a section's own body."""
     counts = []
-    for count, noun in (
+    for n, unit in (
         (len(ctx.tables_of(section)), "table"),
         (len(ctx.diagrams_of(section)), "diagram"),
     ):
-        if count:
-            counts.append(f"{count} {noun}" if count == 1 else f"{count} {noun}s")
+        if n:
+            counts.append(count(n, unit))
     return counts
 
 

@@ -27,8 +27,8 @@ Feature: Default view
       """
       [S1] Overview
       Intro text.
-        [S1.1] Goals (2 lines)
-        [S1.2] Reference (1 line, 1 sub)
+        [S1.1] Goals (2 ln)
+        [S1.2] Reference (1 ln, 1 sub)
       [S2] Appendix
       Last.
       """
@@ -45,7 +45,7 @@ Feature: Default view
       Two.
         [S1.2] Reference
       Ref body.
-          [S1.2.1] Details (1 line)
+          [S1.2.1] Details (1 ln)
       [S2] Appendix
       Last.
       """

@@ -39,7 +39,7 @@ def test_readme_titles_a_directory_before_index(tmp_path: Path) -> None:
 def test_an_empty_heading_leaves_the_file_untitled(tmp_path: Path) -> None:
     write(tmp_path, "blank.md", "#\ntext\n")
     lines = Library.from_path(tmp_path).tree().splitlines()
-    assert lines[1] == "  blank.md (2 lines)"
+    assert lines[1] == "  blank.md (2 ln)"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
@@ -64,7 +64,7 @@ def test_unreadable_entries_are_skipped_and_reported(
         (tmp_path / "locked.md").chmod(0o644)
         (tmp_path / "closed").chmod(0o755)
     captured = capsys.readouterr()
-    assert captured.out.splitlines()[1:] == ["  ok.md Ok (1 line)"]
+    assert captured.out.splitlines()[1:] == ["  ok.md Ok (1 ln)"]
     assert "mdpeek: skipped " in captured.err
     assert "locked.md: Permission denied" in captured.err
     assert "closed: Permission denied" in captured.err
@@ -91,7 +91,7 @@ def test_glob_match(path: str, pattern: str, expected: bool) -> None:
 def test_tree_headings_count_their_tables(tmp_path: Path) -> None:
     write(tmp_path, "data.md", "# Data\n## Sales\n| a | b |\n|---|---|\n| 1 | 2 |\n")
     lines = Library.from_path(tmp_path).tree(depth=1).splitlines()
-    assert lines[-1] == "    [S1.1] Sales (3, 1 table)"
+    assert lines[-1] == "    [S1.1] Sales (3, 1 tbl)"
 
 
 def test_budget_must_be_positive(tmp_path: Path) -> None:
@@ -131,7 +131,7 @@ def test_grep_limits_must_be_positive(tmp_path: Path) -> None:
 def test_grep_over_budget_says_so(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     write(tmp_path, "a.md", "# A\n## B\nneedle\n## C\nneedle\n")
     assert main([str(tmp_path), "--grep", "needle", "--budget", "2"]) == 0
-    assert "mdpeek: grep: -n 1 is 4 lines, the smallest, over --budget 2" in capsys.readouterr().err
+    assert "mdpeek: grep: -n 1 is 4 ln, the smallest, over --budget 2" in capsys.readouterr().err
 
 
 @pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0, reason="needs POSIX permissions")
@@ -166,5 +166,5 @@ def test_listing_as_json_and_reporting_unreadable_files(
         finally:
             (tmp_path / "b.md").chmod(0o644)
         captured = capsys.readouterr()
-        assert "(1 fenced block in 1 file)" in captured.out
+        assert "(1 fence in 1 file)" in captured.out
         assert "b.md: Permission denied" in captured.err

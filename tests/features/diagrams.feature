@@ -30,19 +30,19 @@ Feature: Diagrams
       [S1] Flow
       How orders move:
 
-      [D1] mermaid flowchart (4 lines)
+      [D1] mermaid flowchart (4 ln)
 
       Then they ship.
         [S1.1] Graph
-      [D2] graphviz digraph (1 line)
+      [D2] graphviz digraph (1 ln)
       """
 
   Scenario: Stubs and structure count diagrams
     When I run "mdpeek doc.md --structure"
     Then the output is:
       """
-      [S1] Flow (10, 1 diagram)
-        [S1.1] Graph (3, 1 diagram)
+      [S1] Flow (10, 1 diag)
+        [S1.1] Graph (3, 1 diag)
       """
 
   Scenario: Opening one diagram prints its bare source
@@ -59,12 +59,12 @@ Feature: Diagrams
     When I run "mdpeek doc.md --diagram D2 --diagram D1"
     Then the output is:
       """
-      [D2] S1.1 graphviz digraph (1 line)
+      [D2] S1.1 graphviz digraph (1 ln)
       ```dot
       digraph G { a -> b }
       ```
 
-      [D1] S1 mermaid flowchart (4 lines)
+      [D1] S1 mermaid flowchart (4 ln)
       ```mermaid
       flowchart LR
           A[order] --> B{paid?}
@@ -77,13 +77,13 @@ Feature: Diagrams
     When I run "mdpeek doc.md --diagrams"
     Then the output is:
       """
-      [D1] S1 mermaid flowchart (4 lines)
-      [D2] S1.1 graphviz digraph (1 line)
+      [D1] S1 mermaid flowchart (4 ln)
+      [D2] S1.1 graphviz digraph (1 ln)
       """
     When I run "mdpeek doc.md --diagrams -s S1.1"
     Then the output is:
       """
-      [D2] S1.1 graphviz digraph (1 line)
+      [D2] S1.1 graphviz digraph (1 ln)
       """
 
   Scenario: Diagrams inline on request
