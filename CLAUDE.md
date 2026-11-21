@@ -45,5 +45,12 @@ uv tool install --force --reinstall .   # Install globally
 - **Keep the agent guide current.** `src/mdpeek/agent_instructions.md`
   (printed by `--agent-instructions`) must cover every user-facing feature.
   Update it in the same PR as the feature; see CONTRIBUTING.md.
+  It must stay under 3500 characters (`test_guide_stays_compact`), and it is
+  close to that. Make room by tightening prose, not by dropping examples;
+  raising the limit is a deliberate decision, not a way to make CI pass.
+- **Counts in text output go through `units.py`.** Use `count(n, unit)` and
+  `shape(cols, rows)` rather than hand-written f-strings, so the wording
+  (`53 ln, 6 sec, 1 tbl`, `4×32`) stays consistent. Give a new unit its
+  short form there. Don't name a local variable `count`: it hides the helper.
 - Versions come from git tags (`hatch-vcs`); never add a `version` field.
 - Releases: see CONTRIBUTING.md.
