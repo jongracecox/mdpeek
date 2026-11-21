@@ -102,7 +102,7 @@ def test_output_is_capped_at_a_line(small):
 
 def test_errors_can_be_returned_as_text():
     docs = Toolset(docs_dir=SMALL, errors="return")
-    assert docs.call_sync(ids=["S1"]).startswith("error: in a directory, ids are PATH#ID")
+    assert docs.call_sync(ids=["S1"]).startswith("error: in a directory, name the file: PATH#ID")
     assert asyncio.run(docs.call(ids=["S1"])).startswith("error: ")
 
 
@@ -270,7 +270,7 @@ def test_tool_names_are_checked(small):
 def test_description_stays_compact():
     """Every session pays for the description: keep it small; detail lives in help."""
     docs = Toolset(docs_dir=SMALL, url_allow=["example.com"])
-    assert len(docs.description("docs")) < 400
+    assert len(docs.description("docs")) < 700
     assert "help=True" in docs.description("docs")
     assert len(docs.instructions("docs")) < 600
 
@@ -322,3 +322,58 @@ def test_importing_the_module_loads_no_mcp_library():
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "False"
+
+
+# -- guidance and host context -------------------------------------------------
+
+
+def test_host_text_wraps_description_and_help(small):
+    spec = small.tool(
+        "docs",
+        description_prefix="IMPORTANT: start here.",
+        description_suffix="Owned by the data team.",
+        help_prefix="These docs cover the platform.",
+        help_suffix="Questions: #data-help.",
+    )
+    assert spec.description.startswith("IMPORTANT: start here.\n\nRead the docs directory")
+    assert spec.description.endswith("\n\nOwned by the data team.")
+    text = _run(spec, help=True)
+    assert text.startswith("These docs cover the platform.\n\n# docs: ")
+    assert text.rstrip().endswith("Questions: #data-help.")
+
+
+def test_description_replacement_is_still_wrapped(small):
+    spec = small.tool(description="Custom.", description_prefix="Before.")
+    assert spec.description == "Before.\n\nCustom."
+
+
+def test_help_catalog_lists_documents_and_respects_the_cap():
+    docs = Toolset(docs_dir=FIXTURES / "library", catalog_lines=2)
+    text = docs.call_sync(help=True)
+    catalog = text.split("## Documents\n\n", 1)[1].splitlines()
+    assert len(catalog) == 3 and catalog[-1].startswith("- … 7 more")
+    assert "## Documents" not in Toolset(docs_dir=FIXTURES / "library", catalog_lines=0).help()
+
+
+def test_parameters_are_documented_when_pydantic_is_available(small):
+    pytest.importorskip("pydantic")
+    import inspect
+
+    param = inspect.signature(small.tool().fn).parameters["ids"]
+    assert "whole files" in param.annotation.__metadata__[0].description
+
+
+def test_grep_lines_setting(small):
+    assert "> " in Toolset(docs_dir=FIXTURES / "library").call_sync(grep="installer")
+    assert "> " not in Toolset(docs_dir=FIXTURES / "library", grep_lines=0).call_sync(
+        grep="installer"
+    )
+
+
+def test_bare_paths_and_folders_in_ids():
+    docs = Toolset(docs_dir=FIXTURES / "library")
+    assert docs.call_sync(ids=["guides/install.md"], full=True).count("Run the installer.") == 1
+    with pytest.raises(ToolError, match="is a folder"):
+        docs.call_sync(ids=["guides"])
+    with pytest.raises(ToolError, match="empty ID"):
+        docs.call_sync(ids=["guides/install.md#"])

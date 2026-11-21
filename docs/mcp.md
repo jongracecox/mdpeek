@@ -46,30 +46,40 @@ One tool. What it does depends on which argument is given:
 
 | Call | Result |
 |------|--------|
-| `docs()` | The map: the directory tree with file titles, sizes and headings, fitted to 150 lines. |
+| `docs(help=True)` | The guide: how to research a question, every call form, the rules, and a list of every document with its title and one-line summary. |
+| `docs()` | The map: the directory tree with each file's title, size and summary, fitted to 150 lines. |
 | `docs(source="guides/install.md")` | One file's outline: `[S1.2] Title (12)` per heading. |
-| `docs(source="guides/install.md", full=True)` | The whole file (cut at `max_output_chars`). |
+| `docs(ids=["guides/install.md", "faq.md"])` | Whole files, several per call (`full=True` adds every level). |
 | `docs(ids=["guides/install.md#S1.2", "guides/deploy.md#T1"])` | Those sections, tables, diagrams (`D1`), code blocks (`F1`) or front matter (`meta`). |
+| `docs(grep="retry\|timeout")` | Sections with matching lines, each followed by up to two of those lines; files with most matches first. |
 | `docs(show="tables")` | One line per table (or `diagrams`, `fences`, `meta`), grouped by file. |
-| `docs(grep="retry\|timeout")` | Sections with matching lines, files with most matches first. |
 | `docs(source="guides/deploy.md", sql="select ...")` | Read-only SQL over that file's tables (`t1`, `t2`, ...). |
 
 The other parameters refine those calls: `depth` and `full` for sections,
 `rows` (`"10-20"`), `cols` (`"name,region"`) and `limit` for tables and
-SQL.
+SQL. Each parameter carries a description in the input schema.
 
-The tool's description is kept short (about 300 characters), because every
-session pays for it, and ends with "Call with help=True for how it works".
-`docs(help=True)` returns the full guide: every call form, the ID scheme, the
-rules and the limits. `docs.description(name)` and `docs.help(name)` return
-both texts if you want to show or extend them.
+**Titles and summaries.** A document's title is its front matter `title`,
+else its first heading. Its summary is the front matter `summary` (or
+`description`), else the first sentence of its first paragraph, else its
+first few section headings. Front matter makes the map and the help list
+far more useful: a file whose first heading is "Schema" says little on its
+own.
 
-A session usually goes map → search → fetch:
+**The description teaches a way of working.** It is short (about 550
+characters), points at `help=True`, and tells the agent that answers are
+often split across documents, so it keeps searching after the obvious one.
+In testing, agents always called `help=True` with this description and
+never without it, and the document list is what led them to the less
+obvious files. `docs.description(name)` and `docs.help(name)` return both
+texts.
+
+A session usually goes guide → search → read:
 
 ```text
-docs()                                 → tree of the docs directory
-docs(grep="retention")                 → guides/storage.md: [S2.1], [S4]
-docs(ids=["guides/storage.md#S2.1"])   → that section, its subsections as stubs
+docs(help=True)                        → how to work, and every document with its summary
+docs(grep="retention|ttl|expiry")      → guides/storage.md [S2.1] with the matching lines
+docs(ids=["guides/storage.md", "reference/limits.md"])   → both files, whole
 ```
 
 Output is compact text, not JSON. Things the agent may want to act on come
@@ -125,6 +135,8 @@ docs = Toolset(
 | `diagram_summaries` | `True` | Show diagrams in sections as one-line stubs. |
 | `default_limit`, `max_limit` | 50, 500 | Rows returned by SQL; the agent can ask for up to `max_limit`. |
 | `budget` | 150 | Lines for the directory map and directory-wide lists. |
+| `grep_lines` | 2 | Matching lines shown under each section in grep results; 0 shows sections only. |
+| `catalog_lines` | 300 | Documents listed in `help=True`; 0 leaves the list out. |
 | `max_output_chars` | 40,000 | Hard cap on one result, with a note saying it was cut. |
 | `formats` | `False` | Add a `format` parameter (`csv`, `json`, ...) for machine consumers. |
 | `errors` | `"raise"` | Or `"return"`: see [Errors](#errors). |
@@ -132,8 +144,30 @@ docs = Toolset(
 | `register(server, ...)` / `tool(...)` | Default | |
 |---------------------------------------|---------|---|
 | `name` | `"mdpeek"` | The tool's name. |
-| `description` | built in | Replace the short description. `docs.description(name)` gives the default to extend; keep the pointer to `help=True`. |
+| `description_prefix`, `description_suffix` | none | Your text before or after mdpeek's description, for example "IMPORTANT: start here before using other tools", or what the docs cover. |
+| `help_prefix`, `help_suffix` | none | Your text before or after the `help=True` guide: aliases, house rules, where to ask. |
+| `description` | built in | Replace mdpeek's description entirely (the prefix and suffix still wrap it). Keep the pointer to `help=True`. |
 | `before_call`, `after_call`, `wrap` | none | See [hooks](#telemetry-and-access-control-hooks). |
+
+### Adding your own context
+
+The defaults are generic. Wrap them with what only your server knows: why
+the docs matter, what they cover, aliases, where to ask.
+
+```python
+docs.register(
+    server,
+    name="docs",
+    description_prefix=(
+        "IMPORTANT: Start here before using other tools. These are the platform docs: "
+        "naming conventions, client aliases and the rules for querying correctly."
+    ),
+    help_prefix="Client aliases: ACME = Acme Retail (catalog acme_prod).",
+    help_suffix="If the docs don't answer it, ask in #data-help.",
+)
+```
+
+Keep the prefix to a sentence or two: every session reads the description.
 
 ## Telemetry and access control: hooks
 

@@ -37,7 +37,7 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Annotated, Any, Literal, cast
 
 from mdpeek import ops
 from mdpeek.cache import Cache
@@ -170,6 +170,8 @@ class Toolset:
         default_limit: int = 50,
         max_limit: int = 500,
         budget: int = DEFAULT_BUDGET,
+        grep_lines: int = 2,
+        catalog_lines: int = 300,
         max_output_chars: int = 40_000,
         formats: bool = False,
         errors: Literal["raise", "return"] = "raise",
@@ -191,6 +193,8 @@ class Toolset:
         self.default_limit = default_limit
         self.max_limit = max_limit
         self.budget = budget
+        self.grep_lines = grep_lines
+        self.catalog_lines = catalog_lines
         self.max_output_chars = max_output_chars
         self.formats = formats
         if errors not in ("raise", "return"):
@@ -248,9 +252,14 @@ class Toolset:
 
     # -- the work ------------------------------------------------------------
 
-    def _execute(self, arguments: Mapping[str, Any], name: str = DEFAULT_NAME) -> _Result:
+    def _execute(
+        self,
+        arguments: Mapping[str, Any],
+        name: str = DEFAULT_NAME,
+        help_text: Callable[[], str] | None = None,
+    ) -> _Result:
         if arguments.get("help"):
-            return _Result(self.help(name))
+            return _Result(help_text() if help_text else self.help(name))
         args = _Args.parse(arguments, self)
         try:
             return self._dispatch(args)
@@ -310,7 +319,7 @@ class Toolset:
                 )
             return _Result(render(doc, Mode.STRUCTURE, args.depth))
         if args.mode == "grep":
-            return _from_ops(ops.grep_file(doc, args.grep or "", sections))
+            return _from_ops(ops.grep_file(doc, args.grep or "", sections, lines=self.grep_lines))
         if args.mode == "show":
             return self._show_file(doc, args)
         if args.mode == "sql":
@@ -416,7 +425,7 @@ class Toolset:
         library = Library.from_path(root, confine=True)
         library.display = self._display(root)  # never show the server's absolute path
         if args.mode == "map":
-            out = ops.tree(library, self.budget, depth=args.depth)
+            out = ops.tree(library, self.budget, depth=args.depth, summaries=True)
             result = _from_ops(out)
             if out.fit is not None and out.truncated:
                 result.notes.append(
@@ -425,7 +434,9 @@ class Toolset:
                 )
             return result
         if args.mode == "grep":
-            out = ops.grep_library(library, args.grep or "", budget=self.budget)
+            out = ops.grep_library(
+                library, args.grep or "", budget=self.budget, lines=self.grep_lines
+            )
             return self._grouped(out, "matching sections")
         if args.show == "meta":
             result = _from_ops(ops.meta_library(library, args.fmt))
@@ -453,21 +464,36 @@ class Toolset:
         return result
 
     def _fetch_from_directory(self, args: _Args, root: Path) -> _Result:
-        files: dict[str, list[str]] = {}
+        files: dict[str, list[str] | None] = {}  # None: the whole file
         for raw in args.ids:
             path, _, item = raw.rpartition("#")
-            if not path or not item:
-                raise ToolError(
-                    f"in a directory, ids are PATH#ID (e.g. guides/install.md#S1), got {raw!r}"
-                )
-            files.setdefault(path, []).append(item)
+            if not path:  # a bare path: the whole file
+                if raw.lower() == "meta" or _SECTION_ID.fullmatch(raw) or _ITEM_ID.fullmatch(raw):
+                    raise ToolError(
+                        f"in a directory, name the file: PATH#ID (e.g. guides/install.md#{raw}), "
+                        f"or PATH for the whole file; got {raw!r}"
+                    )
+                files[raw] = None
+            elif not item:
+                raise ToolError(f"empty ID after '#' in {raw!r}")
+            elif path not in files:
+                files[path] = [item]
+            elif (wanted := files[path]) is not None:  # a whole file already covers it
+                wanted.append(item)
         blocks: list[str] = []
         result = _Result("")
         for path, items in files.items():
             target = confine(root, path)
             if not target.is_file():
-                raise ToolError(f"{path!r} is not a file")
+                raise ToolError(f"{path!r} is a folder; use source={path!r} for its tree")
             rel = target.relative_to(root).as_posix() if root in target.parents else path
+            if items is None:
+                mode = Mode.FULL if args.full else Mode.VIEW
+                text = render(
+                    _parse(target), mode, args.depth, None, self.tables, self.diagram_summaries
+                )
+                blocks.append(f"==> {rel} <==\n{text}")
+                continue
             sub = self._on_file(args.with_ids(items), _parse(target), label=rel)
             blocks.append(sub.text)
             result.notes += [f"{rel}: {n}" for n in sub.notes]
@@ -486,41 +512,55 @@ class Toolset:
         return " and ".join(where) or "nothing (no docs directory or URLs configured)"
 
     def description(self, name: str = DEFAULT_NAME) -> str:
-        """The tool's description: short, because every session pays for it.
-
-        It points at ``help=True`` for the full guide (:meth:`help`).
-        """
+        """The tool's description: a short usage pattern, because every session
+        pays for it; :meth:`help` has the rest."""
         sql = ", sql= to query a file's tables" if self.sql else ""
         return (
-            f"Read {self._where()} a piece at a time instead of whole files. Call with no "
-            'arguments for the map, then ids=["guide.md#S2"] to read sections, tables or code '
-            f'blocks, grep="regex" to find where a topic is covered, show="tables" to list '
-            f"them{sql}. Call with help=True for how it works."
+            f"Read {self._where()} a piece at a time. Start with help=True: it lists every "
+            "document with a one-line summary and explains every call. Then grep several "
+            'related terms at once (grep="a|b|c" shows matching lines) and read every '
+            'relevant document: ids=["guide.md", "faq.md"] for whole files, '
+            f'ids=["guide.md#S2"] for sections{sql}. Answers are often split across '
+            "documents: the obvious one gives part, while caveats, exceptions, later changes "
+            "and specific values live elsewhere, so keep searching until every part of the "
+            "question is covered."
         )
 
     def help(self, name: str = DEFAULT_NAME) -> str:
-        """The full guide, returned by a call with ``help=True``."""
+        """The full guide, returned by a call with ``help=True``: how to research a
+        question, every call, the rules, and a catalog of the documents."""
         lines = [
             f"# {name}: read {self._where()} a piece at a time",
             "",
-            "Start with the map, then fetch only what you need. IDs come from the map and",
-            "outlines and never from heading text: S2.1 section, T3 table, D1 diagram,",
-            "F4 code block, meta for front matter. In a directory, prefix the file: PATH#ID.",
+            "## How to research a question",
+            "",
+            "1. Read the document list below (or call with no arguments for the tree).",
+            "   Shortlist every document whose title or summary could bear on the question;",
+            '   for "why" or "list every" questions, err on the side of more.',
+            "2. Search several terms at once, including column names, statuses and",
+            '   synonyms: grep="unknown|missing|-1". Results show the matching lines.',
+            '3. Read whole documents with ids=["a.md", "b.md"], several per call; read',
+            '   parts of long documents by section: ids=["a.md#S2"].',
+            "4. The obvious document is rarely the whole answer. After reading it, grep for",
+            "   the names it mentions (tables, columns, statuses, clients) to find caveats and",
+            "   exceptions elsewhere, and follow cross-references.",
+            "5. When documents disagree, prefer the more specific or more recent one and say",
+            "   which you followed.",
+            "6. Before answering, check every part of the question against what you found.",
+            "   If a part rests on a single document, search once more for that topic, and",
+            "   check the list again for documents you have not opened.",
             "",
             "## Calls",
             "",
-            f"{name}()                          map: directory tree with titles, sizes, headings",
+            f"{name}()                          tree: each file with its title and summary",
             f'{name}(source="a.md")             outline of one file: [S1.2] Title (own lines)',
-            f'{name}(source="a.md", full=True)  the whole file (large files are cut; prefer ids)',
-            f'{name}(source="guides")           tree of one folder',
-            f'{name}(ids=["a.md#S2"])           a section, its subsections as one-line stubs',
-            f'{name}(ids=["a.md#S2"], depth=2)  ... plus one more level',
-            f'{name}(ids=["a.md#S2"], full=True) ... with everything below it',
-            f'{name}(ids=["a.md#T1"])           a table: column types and the first rows',
+            f'{name}(ids=["a.md", "b.md"])      whole files (full=True adds every level)',
+            f'{name}(ids=["a.md#S2"])           a section, subsections as one-line stubs;',
+            "                                   depth=2 or full=True for more",
             f'{name}(ids=["a.md#T1"], rows="10-20", cols="name,region", limit=50)',
             f'{name}(ids=["a.md#D1", "a.md#F2"]) diagram or code block source',
             f'{name}(ids=["a.md#meta"])         front matter',
-            f'{name}(grep="retry|timeout")      sections with matching lines (regex; smart case)',
+            f'{name}(grep="retry|timeout")      matching sections and lines (regex; smart case)',
             f'{name}(show="tables")             one line per table; also diagrams, fences, meta',
         ]
         if self.sql:
@@ -530,13 +570,14 @@ class Toolset:
             "## Rules",
             "",
             "- Pass at most one of ids, show, grep" + (", sql." if self.sql else "."),
+            "- IDs come from outlines and never from heading text: S2.1 section, T3 table,",
+            "  D1 diagram, F4 code block, meta. In a directory, prefix the file: PATH#ID.",
             '- With source set to one file, ids=["S2"] scopes show, grep'
             + (" or sql" if self.sql else "")
             + " to sections.",
-            "- In a directory, ids must be PATH#ID; paths are relative to the docs directory.",
             "- Line counts in outlines exclude subsections; `6×320` is columns × rows.",
             "- Large tables and diagrams inside sections appear as one-line [T1] / [D1] stubs.",
-            f"- Output stops at {self.budget} lines for maps and lists, and at "
+            f"- Output stops at {self.budget} lines for trees and lists, and at "
             f"{self.max_output_chars:,} characters overall.",
             "- Notes at the end start with 'note:': rows held back, truncation, cache.",
         ]
@@ -546,15 +587,34 @@ class Toolset:
                 f"  view; read-only (SELECT); {self.default_limit} rows by default, limit= up to "
                 f"{self.max_limit}.",
             ]
+        lines += self._catalog()
         return "\n".join(lines) + "\n"
+
+    def _catalog(self) -> list[str]:
+        """``## Documents``: every file with its title and summary, up to catalog_lines."""
+        if self.docs_dir is None or self.catalog_lines < 1:
+            return []
+        library = Library.from_path(self.docs_dir, confine=True)
+        entries = []
+        for node in library.files_in_order():
+            label = library.relative(node)
+            if node.title is not None:
+                label += f": {node.title.text}"
+            if node.summary:
+                label += f" — {node.summary}"
+            entries.append(f"- {label}")
+        shown = entries[: self.catalog_lines]
+        out = ["", "## Documents", "", *shown]
+        if len(entries) > len(shown):
+            out.append(f"- … {len(entries) - len(shown)} more: use the tree or grep")
+        return out
 
     def instructions(self, name: str = DEFAULT_NAME) -> str:
         """A short paragraph a server can add to its MCP ``instructions``."""
         return (
-            f"For documentation, call {name}() first to see the map, then fetch sections, "
-            "tables and code blocks by ID instead of reading whole files. Use grep to find "
-            "where a topic is covered"
-            + (", and sql to answer questions from a table." if self.sql else ".")
+            f"For documentation, call {name}(help=True) first: it lists every document with "
+            "a summary. Then grep for the topic and read the relevant documents whole or by "
+            "section" + (", and use sql to answer questions from a table." if self.sql else ".")
         )
 
     def tool(
@@ -562,6 +622,10 @@ class Toolset:
         name: str = DEFAULT_NAME,
         *,
         description: str | None = None,
+        description_prefix: str | None = None,
+        description_suffix: str | None = None,
+        help_prefix: str | None = None,
+        help_suffix: str | None = None,
         before_call: BeforeCall | None = None,
         after_call: AfterCall | None = None,
         wrap: Wrap | None = None,
@@ -574,14 +638,22 @@ class Toolset:
         refused, and an exception it raises is logged, never passed on.
         ``before_call`` may raise ``PermissionError`` to refuse the call.
 
+        ``description_prefix`` / ``description_suffix`` and ``help_prefix`` /
+        ``help_suffix`` wrap mdpeek's text with the host's own context (what the
+        docs cover, "start here", aliases, links); ``description`` replaces the
+        default description, which the prefix and suffix then wrap.
+
         ``error_type`` is the framework's own tool-error class: mdpeek's errors
         and refusals are re-raised as it, so the framework shows the message to
         the client (some hide the message of any other exception).
         """
         if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", name):
             raise ValueError(f"invalid tool name {name!r}: use letters, digits, _ . -")
-        text = description or self.description(name)
+        text = _wrap(description_prefix, description or self.description(name), description_suffix)
         toolset = self
+
+        def help_text() -> str:
+            return _wrap(help_prefix, toolset.help(name), help_suffix) + "\n"
 
         async def run(**arguments: Any) -> str:
             given = {k: v for k, v in arguments.items() if v is not None and v is not False}
@@ -594,7 +666,7 @@ class Toolset:
             try:
                 if before_call is not None:
                     await _maybe_await(before_call(call))
-                result = await asyncio.to_thread(toolset._execute, arguments, name)
+                result = await asyncio.to_thread(toolset._execute, arguments, name, help_text)
                 return toolset._finish(result)
             except PermissionError as exc:
                 status, error, message = "denied", exc, str(exc) or "not allowed"
@@ -648,6 +720,10 @@ class Toolset:
         name: str = DEFAULT_NAME,
         *,
         description: str | None = None,
+        description_prefix: str | None = None,
+        description_suffix: str | None = None,
+        help_prefix: str | None = None,
+        help_suffix: str | None = None,
         before_call: BeforeCall | None = None,
         after_call: AfterCall | None = None,
         wrap: Wrap | None = None,
@@ -662,6 +738,10 @@ class Toolset:
         spec = self.tool(
             name,
             description=description,
+            description_prefix=description_prefix,
+            description_suffix=description_suffix,
+            help_prefix=help_prefix,
+            help_suffix=help_suffix,
             before_call=before_call,
             after_call=after_call,
             wrap=wrap,
@@ -829,6 +909,48 @@ async def _maybe_await(value: Any) -> None:
         await value
 
 
+def _wrap(prefix: str | None, text: str, suffix: str | None) -> str:
+    """``text`` with the host's prefix and suffix, each separated by a blank line."""
+    parts = [p.strip("\n") for p in (prefix, text, suffix) if p]
+    return "\n\n".join(parts)
+
+
+PARAMETER_DOCS = {
+    "source": 'A file or folder inside the docs directory (e.g. "guides/install.md"), or an '
+    "allowed URL. Omit for the whole docs directory.",
+    "ids": 'What to read, several per call: whole files ("guides/install.md"), sections '
+    "(S2.1), tables (T1), diagrams (D1), code blocks (F1) or front matter (meta). In a "
+    'directory, prefix the file: "guides/install.md#S2".',
+    "show": "List items across the docs or one file: tables, diagrams, fences or meta.",
+    "grep": "A regex; returns matching sections with their matching lines. Combine terms: "
+    '"retry|timeout|backoff".',
+    "sql": "A read-only SELECT over one file's tables (t1, t2, ...); needs source=<file>.",
+    "depth": "Heading levels to show in an outline or section.",
+    "full": "With a file: every level. With section ids: each section with everything below it.",
+    "rows": 'Table rows to show, e.g. "10-20".',
+    "cols": 'Table columns to show, e.g. "name,region".',
+    "limit": "Maximum rows for a table or SQL result.",
+    "format": "Output format for tables, lists and SQL: md (default), csv, tsv, json or jsonl.",
+    "help": "The usage guide and a list of every document with its summary. Read it before "
+    "assuming how this tool works.",
+}
+
+
+def _documented(params: list[inspect.Parameter]) -> list[inspect.Parameter]:
+    """Attach PARAMETER_DOCS as pydantic field descriptions, when pydantic is installed
+    (every MCP library depends on it), so they appear in the input schema."""
+    try:
+        from pydantic import Field  # ty: ignore[import-not-found]
+    except ImportError:  # pragma: no cover - MCP libraries always bring pydantic
+        return params
+    return [
+        p.replace(annotation=Annotated[p.annotation, Field(description=PARAMETER_DOCS[p.name])])
+        if p.name in PARAMETER_DOCS
+        else p
+        for p in params
+    ]
+
+
 def _with_signature(
     run: Callable[..., Awaitable[str]], name: str, description: str, toolset: Toolset
 ) -> Callable[..., Awaitable[str]]:
@@ -852,6 +974,7 @@ def _with_signature(
     if toolset.formats:
         params.append(inspect.Parameter("format", kw, default=None, annotation=FormatName | None))
     params.append(inspect.Parameter("help", kw, default=False, annotation=bool))
+    params = _documented(params)
 
     async def tool_fn(**arguments: Any) -> str:
         return await run(**arguments)

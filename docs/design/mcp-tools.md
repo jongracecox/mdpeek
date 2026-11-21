@@ -477,5 +477,27 @@ What changed between this design and the build:
   `help=True` returns the full guide (call forms, ID scheme, rules, limits).
   This follows the convention of the servers it targets, and keeps the
   per-session cost low.
+- **Tuned against a benchmark.** Headless agent sessions (Opus, Sonnet,
+  Haiku) answered 22 multi-document questions over two private doc libraries
+  (30 and 175 files), each graded against an answer key, comparing mdpeek
+  with an existing topic-and-search docs tool and with plain Read/Grep/Glob.
+  What moved the scores:
+  - A description that teaches a way of working (start with `help=True`,
+    keep searching after the obvious document) and a `help=True` that lists
+    every document with its title and summary. Agents called help in every
+    run with it and never without it.
+  - Front matter `title`/`summary` (else first heading and first sentence)
+    in the map and the list, so files are recognisable by topic.
+  - Whole files by path in `ids` (the most common failed call before), grep
+    results that show the matching lines, and parameter descriptions in the
+    input schema.
+  - Result: on the 175-file library mdpeek scored 83–91% across models
+    against 79–86% for the topic-and-search tool and 81–86% for
+    Read/Grep/Glob, in fewer calls. On the 30-file library all three were
+    level. Remaining misses are mostly reasoning (the agent had read the
+    document) rather than retrieval.
+- **Host text wraps the defaults.** `description_prefix`/`_suffix` and
+  `help_prefix`/`_suffix` let a server add its own context without losing
+  the generic guidance.
 - **Not yet done:** `evals/` scenarios for tool output. The tool reuses the
   CLI's renderers, which the existing scenarios already measure.

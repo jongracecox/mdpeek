@@ -14,13 +14,32 @@ Feature: The MCP tool
       # mdpeek: read the docs directory a piece at a time
       """
 
-  Scenario: No arguments show the map of the docs directory
+  Scenario: No arguments show the map of the docs directory, with summaries
     When the agent calls the tool with {}
     Then the result starts with:
       """
       ./ Handbook (9 files, 3 dirs, 37 ln)
-        README.md Handbook (2 ln)
+        README.md Handbook (2 ln) — Start here.
         guides/ Guides (4 files, 1 dir, 16 ln)
+          README.md Guides (2 ln) — How-to guides.
+      """
+
+  Scenario: Help lists every document with its title and summary
+    When the agent calls the tool with {"help": true}
+    Then the result contains "- guides/advanced/tuning.md: Tuning — Turn the knobs."
+
+  Scenario: Bare file paths in ids read whole files, several per call
+    When the agent calls the tool with {"ids": ["guides/install.md", "notes.md#S2"]}
+    Then the result is:
+      """
+      ==> guides/install.md <==
+      [S1] Install
+        [S1.1] Linux (1 ln)
+        [S1.2] macOS (1 ln)
+
+      ==> notes.md <==
+      [S2] Part two
+      Second.
       """
 
   Scenario: A source file alone shows its outline
@@ -60,7 +79,7 @@ Feature: The MCP tool
       | prod | example |
       """
 
-  Scenario: Grep finds the sections that mention a topic
+  Scenario: Grep finds the sections that mention a topic, with the matching lines
     When the agent calls the tool with {"grep": "install"}
     Then the result is:
       """
@@ -68,6 +87,7 @@ Feature: The MCP tool
         guides/install.md Install (2 matches)
           [S1] Install (1 match)
           [S1.1] Linux (1 match)
+            > Run the installer.
       """
 
   Scenario: Show lists the tables across the directory

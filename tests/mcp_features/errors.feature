@@ -15,7 +15,7 @@ Feature: How the MCP tool reports problems
 
   Scenario: In a directory, IDs name their file
     When the agent calls the tool with {"ids": ["S1"]}
-    Then the call fails with a message containing "ids are PATH#ID"
+    Then the call fails with a message containing "name the file: PATH#ID"
 
   Scenario: Problems can be returned as text
     Given the tool is configured to return errors as text

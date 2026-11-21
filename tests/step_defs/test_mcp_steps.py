@@ -98,6 +98,11 @@ def result_starts_with(call: Call, docstring: str) -> None:
     assert _text(call).startswith(docstring)
 
 
+@then(parsers.parse('the result contains "{text}"'))
+def result_contains(call: Call, text: str) -> None:
+    assert text in _text(call)
+
+
 @then(parsers.parse('the result ends with the note "{note}"'))
 def result_note(call: Call, note: str) -> None:
     assert _text(call).endswith(f"note: {note}\n")
