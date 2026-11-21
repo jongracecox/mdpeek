@@ -411,7 +411,6 @@ Feature: Directories
       | --diagram orders.md#D9                                    | orders.md: no diagram 'D9'; available: D1                           |
       | --fence orders.md                                         | --fence needs PATH#ID on a directory, got 'orders.md'               |
       | --fence orders.md#F1 --fence billing.md#F1 --format json  | --format json takes fenced blocks from one file at a time           |
-      | --diagrams                                                | --diagrams only applies to a file                                   |
       | -s orders.md --fences                                     | --fences cannot be combined with -s, --table, --diagram or --fence  |
 
   Scenario: By default the tree expands as far as fits the budget
@@ -591,3 +590,85 @@ Feature: Directories
       | -L 2               | --levels cannot be combined with --grep  |
       | -d 1               | --depth cannot be combined with --grep   |
       | -s notes.md        | --section cannot be combined with --grep |
+
+  Scenario: Tables across a directory, grouped by file
+    When I run "mdpeek docs --tables"
+    Then the output is:
+      """
+      docs/ (1 table in 1 file)
+        guides/deploy.md Deploy (1 table)
+          [T1] S1 table 2 cols × 2 rows: env, url
+      """
+
+  Scenario: Listed items as JSON lines carry their path
+    When I run "mdpeek docs --tables --format jsonl"
+    Then the output is:
+      """
+      {"path":"guides/deploy.md","id":"T1","section":"S1","cols":2,"rows":2,"columns":["env","url"],"names":["env","url"],"types":["TEXT","TEXT"],"warnings":[],"error":null}
+      """
+
+  Scenario: Diagrams and fenced blocks across a directory, in tree order
+    Given a markdown file "flows/orders.md" containing:
+      """
+      # Orders
+      ## Flow
+      ```mermaid
+      flowchart LR
+          A --> B
+      ```
+      ## Setup
+      ```sh
+      make run
+      ```
+      """
+    And a markdown file "flows/billing.md" containing:
+      """
+      # Billing
+      ```dot
+      digraph G { a -> b }
+      ```
+      """
+    When I run "mdpeek flows --fences"
+    Then the output is:
+      """
+      flows/ (3 fenced blocks in 2 files)
+        billing.md Billing (1 fenced block)
+          [F1] S1 dot (1 line) = D1
+        orders.md Orders (2 fenced blocks)
+          [F1] S1.1 mermaid (2 lines) = D1
+          [F2] S1.2 sh (1 line)
+      """
+    When I run "mdpeek flows --diagrams --budget 4"
+    Then the output is:
+      """
+      flows/ (2 diagrams in 2 files)
+        billing.md Billing (1 diagram)
+          [D1] S1 graphviz digraph (1 line)
+        … 1 more (1 file, 1 diagram)
+      """
+    And stderr contains:
+      """
+      mdpeek: diagrams: showing -n 1 to fit --budget 4 (first N files, first N diagrams in each)
+      """
+
+  Scenario: A directory with nothing to list
+    When I run "mdpeek docs --diagrams"
+    Then the output is:
+      """
+      docs/ (0 diagrams)
+      """
+
+  Scenario Outline: Listing options on a directory
+    When I run "mdpeek docs <args>"
+    Then the exit code is 2
+    And stderr contains:
+      """
+      mdpeek: <message>
+      """
+
+    Examples:
+      | args                          | message                                                                               |
+      | --tables --full               | --full cannot be combined with --tables on a directory; open items with --table PATH#ID |
+      | --diagrams -L 2               | --levels cannot be combined with --diagrams on a directory                            |
+      | --fences --format csv         | --format csv does not apply to --fences; use md, json or jsonl                        |
+      | --tables -n 1 --format json   | --first cannot be combined with --format json                                         |

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sys
@@ -145,3 +146,25 @@ def test_grep_reports_unreadable_files(tmp_path: Path, capsys: pytest.CaptureFix
     captured = capsys.readouterr()
     assert "(1 match in 1 file)" in captured.out
     assert "locked.md: Permission denied" in captured.err
+
+
+def test_listing_as_json_and_reporting_unreadable_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write(tmp_path, "b.md", "# B\n```sh\nls\n```\n")
+    write(tmp_path, "a.md", "# A\n```py\nx = 1\n```\n")
+    assert main([str(tmp_path), "--fences", "--format", "json"]) == 0
+    records = json.loads(capsys.readouterr().out)
+    assert [(r["path"], r["id"], r["language"]) for r in records] == [
+        ("a.md", "F1", "py"),
+        ("b.md", "F1", "sh"),
+    ]
+    if sys.platform != "win32" and os.geteuid() != 0:
+        (tmp_path / "b.md").chmod(0)
+        try:
+            assert main([str(tmp_path), "--fences"]) == 0
+        finally:
+            (tmp_path / "b.md").chmod(0o644)
+        captured = capsys.readouterr()
+        assert "(1 fenced block in 1 file)" in captured.out
+        assert "b.md: Permission denied" in captured.err
