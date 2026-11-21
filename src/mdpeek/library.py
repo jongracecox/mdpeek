@@ -261,49 +261,112 @@ class Library:
         regex: re.Pattern[str],
         first: int | None = None,
         budget: int | None = None,
-    ) -> GrepResult:
+    ) -> Grouped:
         """Matching sections, grouped by file, the files with most matches first.
 
-        ``first`` shows the first N files and the first N sections in each,
+        See :meth:`grouped` for ``first`` and ``budget``.
+        """
+        groups: list[_Group] = []
+        for node in self._files():
+            hits = section_hits(node.doc, regex)
+            if hits:
+                children = [(hit_line(s, n), n) for s, n in hits]
+                groups.append(_Group(self.relative(node), node, children))
+        groups.sort(key=lambda g: (-g.count, g.rel))
+        return self.grouped(groups, matches, "section", first, budget)
+
+    def items(
+        self,
+        word: str,
+        lines_of: Callable[[FileNode], list[str]],
+        first: int | None = None,
+        budget: int | None = None,
+    ) -> Grouped:
+        """One summary line per item (e.g. table) in each file, in tree order.
+
+        ``lines_of`` gives a file's item lines; ``word`` names an item. See
+        :meth:`grouped` for ``first`` and ``budget``.
+        """
+        groups = []
+        for node in self.files_in_order():
+            lines = lines_of(node)
+            if lines:
+                groups.append(_Group(self.relative(node), node, [(line, 1) for line in lines]))
+        return self.grouped(groups, lambda n: _plural(n, word), word, first, budget)
+
+    def grouped(
+        self,
+        groups: list[_Group],
+        unit: Callable[[int], str],
+        child_word: str,
+        first: int | None = None,
+        budget: int | None = None,
+    ) -> Grouped:
+        """Render ``groups`` under a summary line.
+
+        ``first`` shows the first N files and the first N lines in each,
         summarising the rest on ``… K more`` lines. With a ``budget`` and no
         ``first``, ``first`` is set to the largest N whose output fits (or 1).
         """
         for name, value in (("first", first), ("budget", budget)):
             if value is not None and value < 1:
                 raise ValueError(f"{name} must be at least 1, got {value}")
-        found: list[_FileHits] = []
-        for node in self._files():
-            hits = section_hits(node.doc, regex)
-            if hits:
-                rel = node.path.relative_to(self.root.path).as_posix()
-                found.append(_FileHits(rel, node, hits))
-        found.sort(key=lambda f: (-f.count, f.rel))
 
-        lines = self._grep_lines(found, first)
+        def render(n: int | None) -> list[str]:
+            return self._grouped_lines(groups, unit, child_word, n)
+
+        lines = render(first)
         if budget is not None and first is None and len(lines) > budget:
-            first = self._largest_first(lambda n: len(self._grep_lines(found, n)) <= budget)
-            lines = self._grep_lines(found, first)
+            first = self._largest_first(lambda n: len(render(n)) <= budget)
+            lines = render(first)
         text = "".join(f"{line}\n" for line in lines)
-        return GrepResult(text, len(found), sum(f.count for f in found), first)
+        return Grouped(text, len(groups), sum(g.count for g in groups), first)
 
-    def _grep_lines(self, found: list[_FileHits], first: int | None) -> list[str]:
-        total = sum(f.count for f in found)
-        details = [matches(total)] + ([f"in {_plural(len(found), 'file')}"] if found else [])
+    def _grouped_lines(
+        self,
+        groups: list[_Group],
+        unit: Callable[[int], str],
+        child_word: str,
+        first: int | None,
+    ) -> list[str]:
+        total = sum(g.count for g in groups)
+        details = [unit(total)] + ([f"in {_plural(len(groups), 'file')}"] if groups else [])
         out = [f"{self.display} ({' '.join(details)})"]
-        shown = found if first is None else found[:first]
-        for f in shown:
-            out.append(INDENT + _labelled(f.rel, f.node.title, [matches(f.count)]))
-            hits = f.hits if first is None else f.hits[:first]
-            out += [INDENT * 2 + hit_line(s, n) for s, n in hits]
-            if len(hits) < len(f.hits):
-                out.append(_more(INDENT * 2, f.hits[len(hits) :], "section"))
-        rest = found[len(shown) :]
+        shown = groups if first is None else groups[:first]
+        for group in shown:
+            out.append(INDENT + _labelled(group.rel, group.node.title, [unit(group.count)]))
+            children = group.children if first is None else group.children[:first]
+            out += [INDENT * 2 + line for line, _ in children]
+            hidden = group.children[len(children) :]
+            if hidden:
+                weight = sum(w for _, w in hidden)
+                more = [_plural(len(hidden), child_word)]
+                if unit(weight) != _plural(weight, child_word):
+                    more.append(unit(weight))
+                out.append(f"{INDENT * 2}… {len(hidden)} more ({', '.join(more)})")
+        rest = groups[len(shown) :]
         if rest:
-            count = sum(f.count for f in rest)
-            out.append(
-                f"{INDENT}… {len(rest)} more ({_plural(len(rest), 'file')}, {matches(count)})"
-            )
+            count = sum(g.count for g in rest)
+            out.append(f"{INDENT}… {len(rest)} more ({_plural(len(rest), 'file')}, {unit(count)})")
         return out
+
+    def relative(self, node: FileNode) -> str:
+        """``node``'s path relative to the library root, with ``/`` separators."""
+        return node.path.relative_to(self.root.path).as_posix()
+
+    def files_in_order(self) -> list[FileNode]:
+        """Every file, in the order the tree lists them."""
+        found: list[FileNode] = []
+
+        def walk(node: DirNode) -> None:
+            for entry in node.entries():
+                if isinstance(entry, FileNode):
+                    found.append(entry)
+                else:
+                    walk(entry)
+
+        walk(self.root)
+        return found
 
     def _files(self) -> list[FileNode]:
         found: list[FileNode] = []
@@ -391,27 +454,28 @@ def _missing_file(root: Path, normal: str) -> str:
 
 
 @dataclass(frozen=True)
-class GrepResult:
-    """Matching sections across a library, as text."""
+class Grouped:
+    """Lines grouped by file (grep hits, or tables etc.), as text."""
 
     text: str
     files: int
-    """Files with a match."""
+    """Files with at least one line."""
     total: int
-    """Matching lines in all files."""
+    """What the lines add up to: matches, or items."""
     first: int | None
     """The ``first`` used: as given, or chosen to fit the budget."""
 
 
 @dataclass(frozen=True)
-class _FileHits:
+class _Group:
     rel: str
     node: FileNode
-    hits: list[tuple[Section, int]]
+    children: list[tuple[str, int]]
+    """Each line under the file, with its weight (matches, or 1 per item)."""
 
     @property
     def count(self) -> int:
-        return sum(n for _, n in self.hits)
+        return sum(weight for _, weight in self.children)
 
 
 @dataclass(frozen=True)
@@ -602,11 +666,6 @@ def _render_entries(node: DirNode, indent_level: int, opts: _TreeOptions, out: l
             details.append(_plural(len(files), "file"))
         details.append(_plural(sum(e.line_count for e in hidden), "line"))
         out.append(f"{indent}… {len(hidden)} more ({', '.join(details)})")
-
-
-def _more(indent: str, hits: list[tuple[Section, int]], word: str) -> str:
-    count = sum(n for _, n in hits)
-    return f"{indent}… {len(hits)} more ({_plural(len(hits), word)}, {matches(count)})"
 
 
 def _dir_height(node: DirNode) -> int:

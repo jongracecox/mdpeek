@@ -57,14 +57,15 @@ mdpeek docs/ -L 2 -n 5              # fixed: 2 levels, first 5 entries; no budge
 mdpeek docs/ -d 1                   # also each file's headings
 mdpeek docs/ --grep install         # by file, most matches first
 mdpeek docs/ -s guides/install.md#S1.2 -s notes.md   # a section, a whole file
+mdpeek docs/ --tables                # every table, by file; also --diagrams, --fences
 mdpeek docs/ --table guides/deploy.md#T1             # also --diagram, --fence
 mdpeek docs/ --exclude reference --include '*.md'    # gitignore-style globs
 ```
 
 Trees show file titles and line/section/table counts. `-L` limits directory
 levels, `-n` entries per level; giving `-L`, `-d` or `-n` turns the budget off. Address files as
-`PATH#ID`, relative to the directory; IDs are the file's own. `--tables`,
-`--diagrams`, `--fences` and `--sql` work on one file, not a directory.
+`PATH#ID`, relative to the directory; IDs are the file's own. `--sql` works
+on one file only.
 
 ## URLs
 

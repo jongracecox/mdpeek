@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from collections.abc import Sequence
@@ -16,7 +17,7 @@ from mdpeek.diagrams import DiagramNotFound
 from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
 from mdpeek.fences import FenceNotFound, render_fence_list, render_fences
 from mdpeek.formats import format_rows, to_json
-from mdpeek.library import DEFAULT_BUDGET, Library, resolve_ref
+from mdpeek.library import DEFAULT_BUDGET, FileNode, Grouped, Library, resolve_ref
 from mdpeek.model import Document, SectionNotFound
 from mdpeek.options import Engine, Format, Mode, OnTableError
 from mdpeek.render import render
@@ -398,18 +399,79 @@ def _grep_directory(args: argparse.Namespace) -> str:
     result = library.grep(regex, first=args.first, budget=budget)
     if not result.files:
         print(f"mdpeek: grep: no matches for {args.grep!r}", file=sys.stderr)
-    elif budget is not None and result.text.count("\n") > budget:
-        print(
-            f"mdpeek: grep: -n {result.first} is {result.text.count(chr(10))} lines, "
-            f"the smallest, over --budget {budget}",
-            file=sys.stderr,
+    _budget_note("grep", "sections", result, budget, args.first)
+    return result.text
+
+
+def _budget_note(
+    label: str, children: str, result: Grouped, budget: int | None, first: int | None
+) -> None:
+    """Say on stderr how the budget limited ``result``, if it did."""
+    if budget is None or first is not None or result.first is None:
+        return
+    lines = result.text.count("\n")
+    if lines > budget:
+        message = f"-n {result.first} is {lines} lines, the smallest, over --budget {budget}"
+    else:
+        message = (
+            f"showing -n {result.first} to fit --budget {budget} "
+            f"(first N files, first N {children} in each)"
         )
-    elif args.first is None and result.first is not None:
-        print(
-            f"mdpeek: grep: showing -n {result.first} to fit --budget {budget} "
-            "(first N files, first N sections in each)",
-            file=sys.stderr,
+    print(f"mdpeek: {label}: {message}", file=sys.stderr)
+
+
+_LIST_KINDS = {  # list flag -> (item word, the file renderer for its items)
+    "tables": "table",
+    "diagrams": "diagram",
+    "fences": "fenced block",
+}
+
+
+def _list_directory(args: argparse.Namespace, settings: TableSettings) -> str:
+    """``--tables`` / ``--diagrams`` / ``--fences`` across a directory, grouped by file."""
+    kind = next(k for k in _LIST_KINDS if getattr(args, k))
+    flag = _flag(kind)
+    used = _used(args, ("depth", "levels", "rows", "cols", "limit", "engine"))
+    used += [_flag(args.mode.value)] if args.mode is not Mode.VIEW else []
+    if used:
+        raise UsageError(
+            f"{_flags(used)} cannot be combined with {flag} on a directory; "
+            f"open items with {flag.rstrip('s')} PATH#ID"
         )
+    fmt = Format(args.format or Format.MD)
+    if fmt in (Format.CSV, Format.TSV):
+        raise UsageError(f"--format {fmt.value} does not apply to {flag}; use md, json or jsonl")
+
+    def render(node: FileNode, as_format: Format) -> str:
+        if kind == "tables":
+            return render_table_list(node.doc.tables, settings, as_format)
+        if kind == "diagrams":
+            return render_diagram_list(node.doc.diagrams, as_format)
+        return render_fence_list(node.doc.fences, as_format)
+
+    library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
+    for skipped in library.skipped:
+        print(f"mdpeek: skipped {skipped}", file=sys.stderr)
+
+    if fmt is not Format.MD:
+        used = _used(args, ("first", "budget"))
+        if used:
+            raise UsageError(f"{_flags(used)} cannot be combined with --format {fmt.value}")
+        records = [
+            {"path": library.relative(node), **item}
+            for node in library.files_in_order()
+            for item in json.loads(render(node, Format.JSON))
+        ]
+        if fmt is Format.JSONL:
+            return "".join(to_json(r) for r in records)
+        return to_json(records)
+
+    budget = args.budget or (DEFAULT_BUDGET if args.first is None else None)
+    word = _LIST_KINDS[kind]
+    result = library.items(
+        word, lambda node: render(node, Format.MD).splitlines(), args.first, budget
+    )
+    _budget_note(kind, f"{word}s", result, budget, args.first)
     return result.text
 
 
@@ -417,6 +479,8 @@ def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
     _reject_url_flags(args)
     if args.grep is not None:
         return _grep_directory(args)
+    if any(getattr(args, k) for k in _LIST_KINDS) and not args.section:
+        return _list_directory(args, settings)
     if args.section or any(getattr(args, kind) for kind in _FETCH_KINDS):
         return _fetch_from_directory(args, settings)
     used = _used(args, _FILE_FLAGS) + [_flag(n) for n in _LISTS if getattr(args, n)]
