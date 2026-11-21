@@ -45,6 +45,7 @@ src/mdpeek/
 ├── meta.py          # front matter: [meta] marker and --meta
 ├── model.py         # Section / Document tree and ID lookup
 ├── options.py       # StrEnum API options and coerce()
+├── ops.py           # operations shared by the CLI and the MCP tool
 ├── parse.py         # markdown -> section tree and tables (markdown-it)
 ├── render.py        # view / structure / full output
 ├── search.py        # --grep: sections with matching lines
