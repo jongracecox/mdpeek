@@ -97,7 +97,7 @@ claude plugin validate plugin
 
 ```sh
 uv run pytest                  # Quick run on the active Python version
-uv run nox                     # Full matrix: Python 3.11, 3.12, 3.13, 3.14
+uv run nox                     # Full matrix: Python 3.10 to 3.15
 uv run nox -s tests-3.14       # One Python version
 uv run nox -s tests_duckdb     # With the optional duckdb engine installed
 uv run nox -s eval             # Efficiency eval against the baseline

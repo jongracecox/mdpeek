@@ -10,7 +10,7 @@ document into context.
 uv sync                                 # Install dependencies
 uv run mdpeek --version                 # Run locally
 uv run pytest                           # Unit, doctest and BDD tests with coverage
-uv run nox                              # Tests across Python 3.11–3.14
+uv run nox                              # Tests across Python 3.10–3.15
 uv run nox -s tests_duckdb              # Tests with the duckdb extra
 uv run nox -s eval                      # Efficiency eval vs evals/baseline.json
 prek run --all-files                    # ruff, ty and hygiene hooks
@@ -20,7 +20,7 @@ uv tool install --force --reinstall .   # Install globally
 ## Conventions
 
 - Test fixtures are synthetic.
-- **Python ≥ 3.11.** The only runtime dependency is `markdown-it-py`. DuckDB is
+- **Python ≥ 3.10** (tested on 3.10–3.15). The only runtime dependency is `markdown-it-py`. DuckDB is
   an optional extra (`mdpeek[duckdb]`) and must be imported lazily.
 - **API options are `StrEnum`s** (in `options.py`). Functions accept either the
   enum or its string value; CLI `choices=` are derived from the enums.

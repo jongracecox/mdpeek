@@ -15,7 +15,7 @@ nox.options.default_venv_backend = "uv"
 nox.options.reuse_existing_virtualenvs = True
 nox.options.sessions = ["tests"]
 
-PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
+PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
 
 
 @nox.session(python=PYTHON_VERSIONS)
