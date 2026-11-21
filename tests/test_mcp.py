@@ -253,6 +253,7 @@ def test_signature_matches_the_settings():
     assert "sql" in inspect.signature(Toolset(docs_dir=SMALL).tool().fn).parameters
     assert "sql" not in inspect.signature(Toolset(docs_dir=SMALL, sql=False).tool().fn).parameters
     assert "format" in inspect.signature(Toolset(docs_dir=SMALL, formats=True).tool().fn).parameters
+    assert "help" in inspect.signature(Toolset(docs_dir=SMALL).tool().fn).parameters
 
 
 def test_tool_names_are_checked(small):
@@ -262,10 +263,26 @@ def test_tool_names_are_checked(small):
 
 
 def test_description_stays_compact():
-    """Every session pays for the description: keep it small."""
+    """Every session pays for the description: keep it small; detail lives in help."""
     docs = Toolset(docs_dir=SMALL, url_allow=["example.com"])
-    assert len(docs.description("docs")) < 1100
+    assert len(docs.description("docs")) < 400
+    assert "help=True" in docs.description("docs")
     assert len(docs.instructions("docs")) < 600
+
+
+def test_help_returns_the_full_guide(small):
+    text = small.call_sync(help=True)
+    assert text.startswith("# mdpeek: read the docs directory")
+    assert 'mdpeek(ids=["a.md#T1"], rows="10-20"' in text
+    assert "sql" not in Toolset(docs_dir=SMALL, sql=False).call_sync(help=True)
+    assert small.call_sync(help=True, grep="ignored") == text
+
+
+def test_help_uses_the_registered_name_and_reaches_hooks(small):
+    seen = []
+    spec = small.tool("docs", after_call=lambda c, o: seen.append((c.mode, o.status)))
+    assert _run(spec, help=True).startswith("# docs: ")
+    assert seen == [("help", "ok")]
 
 
 def test_register_uses_only_what_the_server_accepts(small):

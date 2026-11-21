@@ -122,10 +122,11 @@ def test_registers_one_read_only_tool_with_the_chosen_name():
         "rows",
         "cols",
         "limit",
+        "help",
     }
     assert "enum" in json.dumps(props["show"])
     assert _get(tool.annotations, "readOnlyHint", "read_only_hint") is True
-    assert "docs()" in tool.description
+    assert "help=True" in tool.description
 
 
 def test_sql_off_removes_the_parameter():

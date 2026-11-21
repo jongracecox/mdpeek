@@ -55,8 +55,13 @@ One tool. What it does depends on which argument is given:
 
 The other parameters refine those calls: `depth` and `full` for sections,
 `rows` (`"10-20"`), `cols` (`"name,region"`) and `limit` for tables and
-SQL. The tool's description holds this cheat sheet, so the agent needs no
-separate guide.
+SQL.
+
+The tool's description is kept short (about 300 characters), because every
+session pays for it, and ends with "Call with help=True for how it works".
+`docs(help=True)` returns the full guide: every call form, the ID scheme, the
+rules and the limits. `docs.description(name)` and `docs.help(name)` return
+both texts if you want to show or extend them.
 
 A session usually goes map → search → fetch:
 
@@ -126,7 +131,7 @@ docs = Toolset(
 | `register(server, ...)` / `tool(...)` | Default | |
 |---------------------------------------|---------|---|
 | `name` | `"mdpeek"` | The tool's name. |
-| `description` | built in | Replace the cheat sheet. `docs.description(name)` gives the default to extend. |
+| `description` | built in | Replace the short description. `docs.description(name)` gives the default to extend; keep the pointer to `help=True`. |
 | `before_call`, `after_call`, `wrap` | none | See [hooks](#telemetry-and-access-control-hooks). |
 
 ## Telemetry and access control: hooks

@@ -61,7 +61,7 @@ logger = logging.getLogger("mdpeek.mcp")
 DEFAULT_NAME = "mdpeek"
 Show = Literal["tables", "diagrams", "fences", "meta"]
 FormatName = Literal["md", "csv", "tsv", "json", "jsonl"]
-Mode_ = Literal["map", "ids", "show", "grep", "sql"]
+Mode_ = Literal["help", "map", "ids", "show", "grep", "sql"]
 
 _SECTION_ID = re.compile(r"S\d+(?:\.\d+)*", re.IGNORECASE)
 _ITEM_ID = re.compile(r"[TDF]\d+", re.IGNORECASE)
@@ -93,7 +93,7 @@ class ToolCall:
     tool: str
     """The registered name."""
     mode: str
-    """``map``, ``ids``, ``show``, ``grep`` or ``sql`` (``invalid`` for a bad combination)."""
+    """``help``, ``map``, ``ids``, ``show``, ``grep`` or ``sql``."""
     arguments: Mapping[str, Any]
     """The arguments as received. They may contain user text (SQL, grep patterns)."""
 
@@ -204,7 +204,7 @@ class Toolset:
 
         Takes the tool's arguments (``source``, ``ids``, ``show``, ``grep``,
         ``sql``, ``depth``, ``full``, ``rows``, ``cols``, ``limit``, and
-        ``format`` when enabled). Raises :class:`ToolError`, or returns
+        ``format`` when enabled, ``help``). Raises :class:`ToolError`, or returns
         ``error: ...`` text when ``errors="return"``. No hooks run here; see
         :meth:`tool`.
         """
@@ -248,7 +248,9 @@ class Toolset:
 
     # -- the work ------------------------------------------------------------
 
-    def _execute(self, arguments: Mapping[str, Any]) -> _Result:
+    def _execute(self, arguments: Mapping[str, Any], name: str = DEFAULT_NAME) -> _Result:
+        if arguments.get("help"):
+            return _Result(self.help(name))
         args = _Args.parse(arguments, self)
         try:
             return self._dispatch(args)
@@ -469,36 +471,75 @@ class Toolset:
 
     # -- the tool ------------------------------------------------------------
 
-    def description(self, name: str = DEFAULT_NAME) -> str:
-        """The tool's description: what it reads and how to call it."""
+    def _where(self) -> str:
         where = []
         if self.docs_dir is not None:
-            where.append("the docs directory (paths are relative to it)")
+            where.append("the docs directory")
         if self.url_policy is not None:
             where.append("allowed URLs")
+        return " and ".join(where) or "nothing (no docs directory or URLs configured)"
+
+    def description(self, name: str = DEFAULT_NAME) -> str:
+        """The tool's description: short, because every session pays for it.
+
+        It points at ``help=True`` for the full guide (:meth:`help`).
+        """
+        sql = ", sql= to query a file's tables" if self.sql else ""
+        return (
+            f"Read {self._where()} a piece at a time instead of whole files. Call with no "
+            'arguments for the map, then ids=["guide.md#S2"] to read sections, tables or code '
+            f'blocks, grep="regex" to find where a topic is covered, show="tables" to list '
+            f"them{sql}. Call with help=True for how it works."
+        )
+
+    def help(self, name: str = DEFAULT_NAME) -> str:
+        """The full guide, returned by a call with ``help=True``."""
         lines = [
-            f"Read large markdown a piece at a time: {' and '.join(where) or 'nothing yet'}.",
-            "Start with no arguments for the map, then fetch only what you need. IDs come "
-            "from the map: S2.1 section, T3 table, D1 diagram, F4 code block, meta front "
-            "matter; in a directory, PATH#ID.",
+            f"# {name}: read {self._where()} a piece at a time",
             "",
-            f"{name}() - map: directory tree, or a file's outline with line counts",
-            f'{name}(source="a.md") - outline of one file',
-            f'{name}(ids=["a.md#S2", "a.md#T1"]) - content; depth/full for more of a section, '
-            'rows="10-20"/cols="x,y"/limit for tables',
-            f'{name}(show="tables") - list tables (or diagrams, fences, meta)',
-            f'{name}(grep="retry|limit") - sections with matching lines (regex)',
+            "Start with the map, then fetch only what you need. IDs come from the map and",
+            "outlines and never from heading text: S2.1 section, T3 table, D1 diagram,",
+            "F4 code block, meta for front matter. In a directory, prefix the file: PATH#ID.",
+            "",
+            "## Calls",
+            "",
+            f"{name}()                          map: directory tree with titles, sizes, headings",
+            f'{name}(source="a.md")             outline of one file: [S1.2] Title (own lines)',
+            f'{name}(source="guides")           tree of one folder',
+            f'{name}(ids=["a.md#S2"])           a section, its subsections as one-line stubs',
+            f'{name}(ids=["a.md#S2"], depth=2)  ... plus one more level',
+            f'{name}(ids=["a.md#S2"], full=True) ... with everything below it',
+            f'{name}(ids=["a.md#T1"])           a table: column types and the first rows',
+            f'{name}(ids=["a.md#T1"], rows="10-20", cols="name,region", limit=50)',
+            f'{name}(ids=["a.md#D1", "a.md#F2"]) diagram or code block source',
+            f'{name}(ids=["a.md#meta"])         front matter',
+            f'{name}(grep="retry|timeout")      sections with matching lines (regex; smart case)',
+            f'{name}(show="tables")             one line per table; also diagrams, fences, meta',
         ]
         if self.sql:
-            lines.append(
-                f'{name}(source="a.md", sql="select ... from t1") - read-only SQL over a '
-                "file's tables (t1, t2, ...)"
-            )
-        lines.append(
-            "Pass at most one of ids, show, grep, sql (ids may scope the others to sections "
-            "of one file). Notes at the end start with 'note:'."
-        )
-        return "\n".join(lines)
+            lines.append(f'{name}(source="a.md", sql="select region, count(*) from t1 group by 1")')
+        lines += [
+            "",
+            "## Rules",
+            "",
+            "- Pass at most one of ids, show, grep" + (", sql." if self.sql else "."),
+            '- With source set to one file, ids=["S2"] scopes show, grep'
+            + (" or sql" if self.sql else "")
+            + " to sections.",
+            "- In a directory, ids must be PATH#ID; paths are relative to the docs directory.",
+            "- Line counts in outlines exclude subsections; `6×320` is columns × rows.",
+            "- Large tables and diagrams inside sections appear as one-line [T1] / [D1] stubs.",
+            f"- Output stops at {self.budget} lines for maps and lists, and at "
+            f"{self.max_output_chars:,} characters overall.",
+            "- Notes at the end start with 'note:': rows held back, truncation, cache.",
+        ]
+        if self.sql:
+            lines += [
+                "- SQL: tables load as t1, t2, ... with the column names shown by the table",
+                f"  view; read-only (SELECT); {self.default_limit} rows by default, limit= up to "
+                f"{self.max_limit}.",
+            ]
+        return "\n".join(lines) + "\n"
 
     def instructions(self, name: str = DEFAULT_NAME) -> str:
         """A short paragraph a server can add to its MCP ``instructions``."""
@@ -546,7 +587,7 @@ class Toolset:
             try:
                 if before_call is not None:
                     await _maybe_await(before_call(call))
-                result = await asyncio.to_thread(toolset._execute, arguments)
+                result = await asyncio.to_thread(toolset._execute, arguments, name)
                 return toolset._finish(result)
             except PermissionError as exc:
                 status, error, message = "denied", exc, str(exc) or "not allowed"
@@ -668,6 +709,7 @@ class _Args:
     @classmethod
     def parse(cls, arguments: Mapping[str, Any], toolset: Toolset) -> _Args:
         known = {"source", "ids", "show", "grep", "sql", "depth", "full", "rows", "cols", "limit"}
+        known.add("help")
         if toolset.formats:
             known.add("format")
         unknown = sorted(set(arguments) - known)
@@ -721,6 +763,8 @@ class _Args:
 
 
 def _mode_of(given: Mapping[str, Any]) -> Mode_:
+    if given.get("help"):
+        return "help"
     for mode in ("sql", "grep", "show"):
         if given.get(mode):
             return mode  # type: ignore[return-value]
@@ -764,7 +808,7 @@ def _message(exc: BaseException) -> str:
         return f"cannot read {exc.filename!r}: {exc.strerror or exc}"
     if isinstance(exc, FetchError):
         return f"cannot fetch: {exc}"
-    return str(exc)
+    return str(exc).replace("--grep pattern", "grep pattern")
 
 
 def _output_chars(toolset: Toolset, result: _Result | None) -> int:
@@ -800,6 +844,7 @@ def _with_signature(
     ]
     if toolset.formats:
         params.append(inspect.Parameter("format", kw, default=None, annotation=FormatName | None))
+    params.append(inspect.Parameter("help", kw, default=False, annotation=bool))
 
     async def tool_fn(**arguments: Any) -> str:
         return await run(**arguments)

@@ -7,6 +7,13 @@ Feature: The MCP tool
   Background:
     Given a docs directory from the fixture "library"
 
+  Scenario: Help explains how to call the tool
+    When the agent calls the tool with {"help": true}
+    Then the result starts with:
+      """
+      # mdpeek: read the docs directory a piece at a time
+      """
+
   Scenario: No arguments show the map of the docs directory
     When the agent calls the tool with {}
     Then the result starts with:

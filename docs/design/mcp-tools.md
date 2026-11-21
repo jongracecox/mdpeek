@@ -472,5 +472,10 @@ What changed between this design and the build:
   never reaches the agent.
 - **SQL row cap.** Safe mode fetches `limit + 1` rows, so a note can say more
   rows exist without counting them all.
+- **Short description, `help=True` for detail.** The tool description is
+  about 300 characters and ends with "Call with help=True for how it works";
+  `help=True` returns the full guide (call forms, ID scheme, rules, limits).
+  This follows the convention of the servers it targets, and keeps the
+  per-session cost low.
 - **Not yet done:** `evals/` scenarios for tool output. The tool reuses the
   CLI's renderers, which the existing scenarios already measure.
