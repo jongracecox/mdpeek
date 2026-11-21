@@ -9,7 +9,8 @@ Feature: Navigating a large document
     When I run "mdpeek handbook.md --structure -d 1"
     Then the output is:
       """
-      [S0] (8)
+      [meta] (3)
+      [S0] (2)
       [S1] Introduction (17, 3 sub)
       [S2] Getting Started (4, 3 sub)
       [S3] Architecture / Design (4, 4 sub)

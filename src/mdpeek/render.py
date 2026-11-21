@@ -9,6 +9,9 @@ blank lines at its start and end dropped.
 - **structure**: heading lines only, down to ``depth`` (default: all).
 - **full**: content down to ``depth`` (default: all), nothing deeper.
 
+Front matter is never shown inline: a whole-document render starts with a
+``[meta] (N)`` marker instead (see :mod:`mdpeek.meta`).
+
 >>> from mdpeek.parse import parse
 >>> doc = parse("# A\\nIntro.\\n## B\\nOne.\\nTwo.\\n")
 >>> print(render(doc), end="")
@@ -60,6 +63,8 @@ def render(
 
     ctx = _Context(doc, mode, depth, tables or TableSettings(), diagram_summaries)
     out: list[str] = []
+    if doc.meta is not None and sections is None:
+        out.append(doc.meta.marker())
     for root in _roots(doc, sections):
         _render_section(ctx, root, 1, out)
     return "".join(f"{line}\n" for line in out)

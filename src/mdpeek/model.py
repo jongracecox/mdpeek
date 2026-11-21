@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from mdpeek.diagrams import Diagram
     from mdpeek.engines import QueryResult
     from mdpeek.fences import Fence
+    from mdpeek.meta import FrontMatter
     from mdpeek.options import CacheBackend
     from mdpeek.source import SourceInfo
     from mdpeek.tables import Table, TableSettings
@@ -89,13 +90,16 @@ class Document:
     lines: list[str]
     """Source lines, each keeping its line ending."""
     sections: list[Section]
-    """Top-level sections in order, starting with ``S0`` when there is a preamble."""
+    """Top-level sections in order, starting with ``S0`` when there is a preamble
+    (content before the first heading, after any front matter)."""
     tables: list[Table] = field(default_factory=list)
     """Top-level GFM tables in document order (``T1..Tn``)."""
     diagrams: list[Diagram] = field(default_factory=list)
     """Top-level mermaid/PlantUML/Graphviz/D2 fences in document order (``D1..Dn``)."""
     fences: list[Fence] = field(default_factory=list)
     """Every top-level fenced block in document order (``F1..Fn``), diagrams included."""
+    meta: FrontMatter | None = None
+    """The front matter block at the top of the file, if any. Not part of any section."""
     source: SourceInfo | None = None
     """Where the text came from (path, URL, stdin), and whether it was cached."""
 
