@@ -11,7 +11,7 @@ import shlex
 import shutil
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -98,7 +98,7 @@ def url_serving(http_server, path: str, docstring: str) -> None:
 
 @given(parsers.parse('the time is "{moment}"'))
 def the_time_is(moment: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    frozen = datetime.strptime(moment, "%Y-%m-%d %H:%M").replace(tzinfo=UTC)
+    frozen = datetime.strptime(moment, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
     monkeypatch.setattr(cache_module, "now", lambda: frozen)
 
 

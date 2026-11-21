@@ -2,9 +2,11 @@
 
 A block that opens on the first line with ``---`` (YAML, closed by ``---`` or
 ``...``) or ``+++`` (TOML) is front matter. It is recognised by its fences
-alone: there is no standard set of keys, so mdpeek never interprets what is
-inside. Document output shows a ``[meta] (N)`` marker in its place, and
-``--meta`` prints the block's contents. An unclosed block is ordinary text.
+alone: there is no standard set of keys, so mdpeek interprets nothing inside
+except a ``title`` and a ``summary`` (or ``description``), which label files in
+directory trees (see :meth:`FrontMatter.value`). Document output shows a
+``[meta] (N)`` marker in its place, and ``--meta`` prints the block's contents.
+An unclosed block is ordinary text.
 
 >>> meta = find_front_matter(["---\\n", "title: x\\n", "---\\n", "# A\\n"])
 >>> meta.format, meta.end, meta.source
@@ -15,6 +17,7 @@ True
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -45,6 +48,27 @@ class FrontMatter:
     def marker(self) -> str:
         """The one-line stand-in shown in document output, e.g. ``[meta] (2)``."""
         return f"[{MARKER_ID}] ({self.line_count})"
+
+    def value(self, key: str) -> str | None:
+        """A top-level scalar such as ``title: Venues`` (YAML) or ``title = "Venues"``
+        (TOML), unquoted; ``None`` if absent or not a one-line value.
+
+        >>> FrontMatter("yaml", 3, 'title: "Venues"\\nsummary: Venue rows\\n').value("title")
+        'Venues'
+        >>> FrontMatter("toml", 3, 'title = "Venues"\\n').value("title")
+        'Venues'
+        >>> FrontMatter("yaml", 3, "tags:\\n  - a\\n").value("tags") is None
+        True
+        """
+        sep = ":" if self.format == "yaml" else "="
+        pattern = re.compile(rf"^{re.escape(key)}[ \t]*{sep}[ \t]*(.*?)[ \t]*$", re.MULTILINE)
+        match = pattern.search(self.source)
+        if not match or not match.group(1):
+            return None
+        value = match.group(1)
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        return value or None
 
     def describe(self) -> dict[str, Any]:
         return {"format": self.format, "lines": self.line_count, "source": self.source}

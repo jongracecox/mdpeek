@@ -1,5 +1,5 @@
 import io
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -66,7 +66,7 @@ def test_load_path_and_stdin(tmp_path):
 
 
 def test_load_caches_until_ttl(http_server, monkeypatch):
-    clock = [datetime(2026, 11, 20, 9, 0, tzinfo=UTC)]
+    clock = [datetime(2026, 11, 20, 9, 0, tzinfo=timezone.utc)]
     monkeypatch.setattr(cache_module, "now", lambda: clock[0])
     http_server.serve("/a.md", "# One\n")
     url, cache = f"{http_server.url}/a.md", MemoryCache()
@@ -75,12 +75,12 @@ def test_load_caches_until_ttl(http_server, monkeypatch):
     assert (text, info.from_cache, info.cached_line()) == ("# One\n", False, None)
 
     http_server.serve("/a.md", "# Two\n")
-    clock[0] = datetime(2026, 11, 20, 9, 30, tzinfo=UTC)
+    clock[0] = datetime(2026, 11, 20, 9, 30, tzinfo=timezone.utc)
     text, info = load(url, cache=cache)
     assert (text, info.cached_line()) == ("# One\n", "(cached 2026-11-20 09:00Z)")
 
     assert load(url, cache=cache, refresh=True)[0] == "# Two\n"
-    clock[0] = datetime(2026, 11, 20, 11, 0, tzinfo=UTC)
+    clock[0] = datetime(2026, 11, 20, 11, 0, tzinfo=timezone.utc)
     assert load(url, cache=cache, ttl=60)[1].from_cache is False
     assert len(http_server.requests) == 3
 

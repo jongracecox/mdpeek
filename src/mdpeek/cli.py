@@ -3,32 +3,27 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from collections.abc import Sequence
 from importlib.resources import files
 from pathlib import Path
+from typing import cast
 
-from mdpeek import __version__
+from mdpeek import __version__, ops
 from mdpeek.cache import DEFAULT_TTL, CacheBackend
 from mdpeek.diagram_output import render_diagram_list, render_diagrams
 from mdpeek.diagrams import DiagramNotFound
-from mdpeek.engines import EngineUnavailable, QueryError, QueryResult, run_query
+from mdpeek.engines import EngineUnavailable, QueryError
 from mdpeek.fences import FenceNotFound, render_fence_list, render_fences
-from mdpeek.formats import format_rows, to_json
-from mdpeek.library import DEFAULT_BUDGET, FileNode, Grouped, Library, resolve_ref
-from mdpeek.meta import render_meta, render_meta_list
+from mdpeek.library import DEFAULT_BUDGET, Grouped, Library, resolve_ref
+from mdpeek.meta import render_meta
 from mdpeek.model import Document, SectionNotFound
 from mdpeek.options import Engine, Format, Mode, OnTableError
 from mdpeek.render import render
-from mdpeek.search import compile_pattern, render_hits, section_hits
+from mdpeek.search import compile_pattern
 from mdpeek.source import DEFAULT_TIMEOUT, FetchError, SourceInfo, is_url, load, parse_header
 from mdpeek.table_output import (
-    DEFAULT_LIMIT,
-    render_table,
-    render_table_list,
-    select,
     truncation_note,
 )
 from mdpeek.tables import SelectionError, TableNotFound, TableSettings
@@ -389,33 +384,34 @@ def _check_grep(args: argparse.Namespace, *also: str) -> None:
         raise UsageError(f"{_flags(used)} cannot be combined with --grep")
 
 
+def _emit(out: ops.Output) -> str:
+    """Print an operation's notes to stderr and return its text."""
+    for note in out.notes:
+        print(f"mdpeek: {note}", file=sys.stderr)
+    return out.text
+
+
 def _grep_file(doc: Document, args: argparse.Namespace) -> str:
     _check_grep(args)
-    hits = section_hits(doc, compile_pattern(args.grep), args.section)
-    if not hits:
-        print(f"mdpeek: grep: no matches for {args.grep!r}", file=sys.stderr)
-    return render_hits(hits)
+    return _emit(ops.grep_file(doc, args.grep, args.section))
 
 
 def _grep_directory(args: argparse.Namespace) -> str:
     _check_grep(args, "section", "levels")
-    regex = compile_pattern(args.grep)
+    compile_pattern(args.grep)  # report a bad pattern before reading the directory
     library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
-    for skipped in library.skipped:
-        print(f"mdpeek: skipped {skipped}", file=sys.stderr)
     budget = args.budget or (DEFAULT_BUDGET if args.first is None else None)
-    result = library.grep(regex, first=args.first, budget=budget)
-    if not result.files:
-        print(f"mdpeek: grep: no matches for {args.grep!r}", file=sys.stderr)
-    _budget_note("grep", "sections", result, budget, args.first)
-    return result.text
+    out = ops.grep_library(library, args.grep, first=args.first, budget=budget)
+    text = _emit(out)
+    _budget_note("grep", "sections", out.grouped, budget, args.first)
+    return text
 
 
 def _budget_note(
-    label: str, children: str, result: Grouped, budget: int | None, first: int | None
+    label: str, children: str, result: Grouped | None, budget: int | None, first: int | None
 ) -> None:
     """Say on stderr how the budget limited ``result``, if it did."""
-    if budget is None or first is not None or result.first is None:
+    if result is None or budget is None or first is not None or result.first is None:
         return
     lines = result.text.count("\n")
     if lines > budget:
@@ -439,7 +435,7 @@ _LIST_KINDS = {  # list flag -> (item word, the file renderer for its items)
 
 def _list_directory(args: argparse.Namespace, settings: TableSettings) -> str:
     """``--tables`` / ``--diagrams`` / ``--fences`` across a directory, grouped by file."""
-    kind = next(k for k in _LIST_KINDS if getattr(args, k))
+    kind = cast("ops.ListKind", next(k for k in _LIST_KINDS if getattr(args, k)))
     flag = _flag(kind)
     used = _used(args, ("depth", "levels", "rows", "cols", "limit", "engine"))
     used += [_flag(args.mode.value)] if args.mode is not Mode.VIEW else []
@@ -451,38 +447,19 @@ def _list_directory(args: argparse.Namespace, settings: TableSettings) -> str:
     fmt = Format(args.format or Format.MD)
     if fmt in (Format.CSV, Format.TSV):
         raise UsageError(f"--format {fmt.value} does not apply to {flag}; use md, json or jsonl")
-
-    def render(node: FileNode, as_format: Format) -> str:
-        if kind == "tables":
-            return render_table_list(node.doc.tables, settings, as_format)
-        if kind == "diagrams":
-            return render_diagram_list(node.doc.diagrams, as_format)
-        return render_fence_list(node.doc.fences, as_format)
-
-    library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
-    for skipped in library.skipped:
-        print(f"mdpeek: skipped {skipped}", file=sys.stderr)
-
     if fmt is not Format.MD:
         used = _used(args, ("first", "budget"))
         if used:
             raise UsageError(f"{_flags(used)} cannot be combined with --format {fmt.value}")
-        records = [
-            {"path": library.relative(node), **item}
-            for node in library.files_in_order()
-            for item in json.loads(render(node, Format.JSON))
-        ]
-        if fmt is Format.JSONL:
-            return "".join(to_json(r) for r in records)
-        return to_json(records)
 
+    library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
+    if fmt is not Format.MD:
+        return _emit(ops.list_library(library, kind, settings, fmt=fmt))
     budget = args.budget or (DEFAULT_BUDGET if args.first is None else None)
-    word = _LIST_KINDS[kind]
-    result = library.items(
-        word, lambda node: render(node, Format.MD).splitlines(), args.first, budget
-    )
-    _budget_note(kind, f"{word}s", result, budget, args.first)
-    return result.text
+    out = ops.list_library(library, kind, settings, first=args.first, budget=budget)
+    text = _emit(out)
+    _budget_note(kind, f"{_LIST_KINDS[kind]}s", out.grouped, budget, args.first)
+    return text
 
 
 def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
@@ -503,14 +480,12 @@ def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
             "or run mdpeek on a file in the directory"
         )
     library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
-    for skipped in library.skipped:
-        print(f"mdpeek: skipped {skipped}", file=sys.stderr)
-    pinned = (args.levels, args.depth, args.first)
-    if args.budget is None and any(v is not None for v in pinned):
-        return library.tree(levels=args.levels, first=args.first, depth=args.depth)
-
+    out = ops.tree(library, args.budget, levels=args.levels, depth=args.depth, first=args.first)
+    text = _emit(out)
+    fit = out.fit
     budget = args.budget or DEFAULT_BUDGET
-    fit = library.fit(budget, levels=args.levels, depth=args.depth, first=args.first)
+    if fit is None:
+        return text
     if fit.lines > budget:
         print(
             f"mdpeek: tree: {fit.flags()} is {count(fit.lines, 'line')}, the smallest tree, "
@@ -523,7 +498,7 @@ def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
             f"{fit.next_step} is {count(fit.next_lines, 'line')}",
             file=sys.stderr,
         )
-    return library.tree(levels=fit.levels, first=fit.first, depth=fit.depth or None)
+    return text
 
 
 def _meta_from_directory(args: argparse.Namespace) -> str:
@@ -537,14 +512,7 @@ def _meta_from_directory(args: argparse.Namespace) -> str:
         raise UsageError(f"{_flags(used)} cannot be combined with --meta on a directory")
     _check_meta_format(args)
     library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
-    for skipped in library.skipped:
-        print(f"mdpeek: skipped {skipped}", file=sys.stderr)
-    entries = [
-        (library.relative(node), node.doc.meta)
-        for node in library.files_in_order()
-        if node.doc.meta
-    ]
-    return render_meta_list(entries, args.format or Format.MD)
+    return _emit(ops.meta_library(library, args.format or Format.MD))
 
 
 def _check_meta_format(args: argparse.Namespace) -> None:
@@ -686,55 +654,46 @@ def _show_diagrams(doc: Document, args: argparse.Namespace, label_single: bool =
 
 
 def _show_tables(doc: Document, args: argparse.Namespace, settings: TableSettings) -> str:
-    fmt = Format(args.format or Format.MD)
-    full = args.mode is Mode.FULL
-    wants_data = bool(args.table) or full or args.rows is not None or args.cols is not None
-    tables = [doc.table(t) for t in args.table] if args.table else doc.tables_in(args.section)
-    if not wants_data:
-        return render_table_list(tables, settings, fmt)
-
-    selections = [
-        select(t, rows=args.rows, cols=args.cols, limit=args.limit, full=full) for t in tables
-    ]
-    for selection in selections:
+    out = ops.tables(
+        doc,
+        args.table,
+        args.section,
+        rows=args.rows,
+        cols=args.cols,
+        limit=args.limit,
+        full=args.mode is Mode.FULL,
+        settings=settings,
+        fmt=Format(args.format or Format.MD),
+    )
+    for selection in out.selections:
         note = truncation_note(selection)
         if note:
             print(note, file=sys.stderr)
-    raw = settings.raw_column_names
-    if fmt is Format.JSON and len(selections) > 1:
-        blocks = [render_table(s, fmt, raw_column_names=raw).rstrip("\n") for s in selections]
-        return "[" + ",".join(blocks) + "]\n"
-    separator = "" if fmt is Format.JSONL else "\n"
-    return separator.join(render_table(s, fmt, raw_column_names=raw) for s in selections)
+    return out.text
 
 
 def _run_sql(doc: Document, args: argparse.Namespace) -> str:
-    tables = doc.tables_in(args.section)
-    for table in tables:
+    for table in doc.tables_in(args.section):
         if not table.ok:
             print(f"mdpeek: skipped {table.id} (not parsed: {table.error})", file=sys.stderr)
-    result: QueryResult = run_query(tables, args.sql, args.engine or Engine.AUTO)
-    for note in result.notes:
-        print(f"mdpeek: {note}", file=sys.stderr)
-    fmt = Format(args.format or Format.MD)
-    limit = result.total if args.mode is Mode.FULL else (args.limit or DEFAULT_LIMIT)
-    rows = result.rows[:limit]
-    if len(rows) < result.total:
+    out = ops.query(
+        doc,
+        args.sql,
+        args.engine or Engine.AUTO,
+        args.section,
+        limit=args.limit,
+        full=args.mode is Mode.FULL,
+        fmt=Format(args.format or Format.MD),
+    )
+    for note in out.notes:
+        if not note.startswith("skipped "):
+            print(f"mdpeek: {note}", file=sys.stderr)
+    if out.truncated and out.query is not None:
         print(
-            f"mdpeek: query: showing {len(rows)} of {result.total} rows (use --limit or --full)",
+            f"mdpeek: query: showing {out.shown} of {out.query.total} rows (use --limit or --full)",
             file=sys.stderr,
         )
-    if fmt is Format.JSON:
-        return to_json(
-            {
-                "engine": result.engine.value,
-                "columns": result.columns,
-                "rows": rows,
-                "total": result.total,
-                "shown": len(rows),
-            }
-        )
-    return format_rows(result.columns, rows, fmt)
+    return out.text
 
 
 def _table_settings(args: argparse.Namespace) -> TableSettings:

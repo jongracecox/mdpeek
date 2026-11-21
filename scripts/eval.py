@@ -19,9 +19,10 @@ import io
 import json
 import math
 import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+
+import tomllib
 
 from mdpeek.cli import main as mdpeek
 

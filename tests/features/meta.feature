@@ -1,8 +1,9 @@
 Feature: Front matter
   A metadata block at the very top of a file, fenced by "---" (YAML) or "+++"
-  (TOML), is front matter. mdpeek recognises it by its fences alone and never
-  interprets its keys. Document output shows a one-line "[meta]" marker with
-  the block's line count, and "--meta" prints the block itself.
+  (TOML), is front matter. mdpeek recognises it by its fences alone. The only
+  key it reads is "title", which labels the file in directory trees. Document
+  output shows a one-line "[meta]" marker with the block's line count, and
+  "--meta" prints the block itself.
 
   Background:
     Given a markdown file containing:
@@ -133,6 +134,25 @@ Feature: Front matter
 
       ==> a.md <==
       title: A
+      """
+
+  Scenario: A front matter title labels the file in a directory tree
+    Given a markdown file "kb/venues.md" containing:
+      """
+      ---
+      title: Venues
+      ---
+      ## Schema
+      ## Keys
+      """
+    And a markdown file "kb/plain.md" containing:
+      """
+      # Plain
+      """
+    When I run "mdpeek kb -L 1"
+    Then the output contains:
+      """
+        venues.md Venues (5 ln, 2 sec)
       """
 
   Scenario: Directory front matter as JSON lines

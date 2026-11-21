@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 import urllib.error
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, TextIO
@@ -73,17 +73,42 @@ def read_path(path: str) -> str:
         return handle.read()
 
 
+class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
+    """Runs ``check`` on every redirect target before following it."""
+
+    def __init__(self, check: Callable[[str], None]) -> None:
+        self.check = check
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self.check(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def fetch(
-    url: str, headers: Mapping[str, str] | None = None, timeout: float = DEFAULT_TIMEOUT
+    url: str,
+    headers: Mapping[str, str] | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    check: Callable[[str], None] | None = None,
 ) -> str:
-    """GET ``url`` and decode it (charset from the response, else UTF-8)."""
+    """GET ``url`` and decode it (charset from the response, else UTF-8).
+
+    ``check`` is called with the URL and with every redirect target, and may
+    raise to refuse it (see :class:`mdpeek.guard.UrlPolicy`).
+    """
     from mdpeek import __version__
 
+    if check is not None:
+        check(url)
     request = urllib.request.Request(url, headers={"User-Agent": f"mdpeek/{__version__}"})
     for name, value in (headers or {}).items():
         request.add_header(name, value)
+    opener = (
+        urllib.request.build_opener(_CheckedRedirects(check))
+        if check is not None
+        else urllib.request.build_opener()
+    )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with opener.open(request, timeout=timeout) as response:
             body = response.read(MAX_BYTES + 1)
             charset = response.headers.get_content_charset() or "utf-8"
     except urllib.error.HTTPError as exc:
@@ -106,25 +131,29 @@ def load(
     refresh: bool = False,
     timeout: float = DEFAULT_TIMEOUT,
     stdin: TextIO | None = None,
+    check: Callable[[str], None] | None = None,
 ) -> tuple[str, SourceInfo]:
     """Return the markdown text for ``source`` and where it came from.
 
     ``source`` is a path, an ``http(s)://`` URL, or ``-`` for stdin. For URLs,
     a fresh cache entry (younger than ``ttl`` seconds) is used unless
-    ``refresh``; ``cache=None`` turns caching off.
+    ``refresh``; ``cache=None`` turns caching off. ``check`` vets the URL and
+    each redirect before fetching; a cached entry is only used if the URL passes.
     """
     if source == "-":
         return (stdin or sys.stdin).read(), SourceInfo(source, "stdin")
     if not is_url(source):
         return read_path(source), SourceInfo(source, "path")
 
+    if check is not None:
+        check(source)
     store = make_cache(cache)
     key = cache_key(source, headers)
     if store is not None and not refresh:
         entry = store.get(key)
         if entry is not None and entry.fresh(ttl):
             return entry.text, SourceInfo(source, "url", True, entry.fetched_at)
-    text = fetch(source, headers, timeout)
+    text = fetch(source, headers, timeout, check)
     fetched_at = _cache.now()
     if store is not None:
         store.set(key, CacheEntry(source, text, fetched_at))

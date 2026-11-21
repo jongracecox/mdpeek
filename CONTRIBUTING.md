@@ -41,10 +41,13 @@ src/mdpeek/
 ├── engines.py       # SQL over tables: sqlite, optional duckdb
 ├── fences.py        # every fenced block: --fence / --fences
 ├── formats.py       # md / csv / tsv / json / jsonl output
+├── guard.py         # confining directory and URL policy for untrusted input
 ├── library.py       # directory of markdown files as a tree
+├── mcp.py           # the ready-made MCP tool (no MCP import; see docs/mcp.md)
 ├── meta.py          # front matter: [meta] marker and --meta
 ├── model.py         # Section / Document tree and ID lookup
 ├── options.py       # StrEnum API options and coerce()
+├── ops.py           # operations shared by the CLI and the MCP tool
 ├── parse.py         # markdown -> section tree and tables (markdown-it)
 ├── render.py        # view / structure / full output
 ├── search.py        # --grep: sections with matching lines
@@ -97,9 +100,10 @@ claude plugin validate plugin
 
 ```sh
 uv run pytest                  # Quick run on the active Python version
-uv run nox                     # Full matrix: Python 3.11, 3.12, 3.13, 3.14
+uv run nox                     # Full matrix: Python 3.10 to 3.15
 uv run nox -s tests-3.14       # One Python version
 uv run nox -s tests_duckdb     # With the optional duckdb engine installed
+uv run nox -s tests_mcp        # The MCP tool on mcp 1.x, mcp 2.x and fastmcp
 uv run nox -s eval             # Efficiency eval against the baseline
 ```
 
@@ -151,6 +155,17 @@ CLI), so:
   `Then the exit code is N`) and add new ones sparingly, in the same
   language-neutral style;
 - add a scenario for every user-visible behaviour change.
+
+The MCP tool's behaviour is specified the same way in
+`tests/mcp_features/*.feature`, with steps in
+`tests/step_defs/test_mcp_steps.py`: `When the agent calls the tool with
+{JSON arguments}`, then `Then the result is:` or `Then the call fails with a
+message containing "…"`. They live apart from the CLI features because the
+CLI steps collect `tests/features` recursively.
+
+`tests/test_mcp_contract.py` registers the tool on a real server through each
+MCP library's in-memory client; it skips unless `tests_mcp` installs one.
+Keep `mdpeek.mcp` free of top-level MCP imports (a test checks).
 
 Unit tests (`tests/test_*.py`) cover internals: parsing, the API and edge
 cases.

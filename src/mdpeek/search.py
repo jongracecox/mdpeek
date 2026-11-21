@@ -58,22 +58,43 @@ def section_hits(
 
     ``sections`` limits the search to those sections' subtrees.
     """
+    return [(s, len(found)) for s, found in section_matches(doc, regex, sections)]
+
+
+def section_matches(
+    doc: Document, regex: re.Pattern[str], sections: Iterable[str] | None = None
+) -> list[tuple[Section, list[str]]]:
+    """Each section with matching lines, and those lines (stripped), in document order."""
     owners: dict[int, Section] = {}
     roots = list(doc.sections) if sections is None else [doc.get(s) for s in sections]
     for root in roots:
         for section in root.walk():
             for line in range(section.start, section.body_end):
                 owners[line] = section
-    counts: dict[int, int] = {}
+    found: dict[int, list[str]] = {}
     order: list[Section] = []
     for index in sorted(owners):
-        if regex.search(doc.lines[index].rstrip("\r\n")):
+        line = doc.lines[index].rstrip("\r\n")
+        if regex.search(line):
             section = owners[index]
-            if id(section) not in counts:
-                counts[id(section)] = 0
+            if id(section) not in found:
+                found[id(section)] = []
                 order.append(section)
-            counts[id(section)] += 1
-    return [(s, counts[id(s)]) for s in order]
+            found[id(section)].append(line.strip())
+    return [(s, found[id(s)]) for s in order]
+
+
+SNIPPET_CHARS = 120
+
+
+def snippets(lines: list[str], limit: int, indent: str) -> str:
+    """Up to ``limit`` matching lines, each on its own ``> `` line, cut to 120 chars."""
+    shown = []
+    prose = [line for line in lines if not line.startswith("#")]  # the heading is already shown
+    for line in prose[:limit]:
+        text = line if len(line) <= SNIPPET_CHARS else line[: SNIPPET_CHARS - 1] + "…"
+        shown.append(f"{indent}> {text}")
+    return "".join(f"\n{s}" for s in shown)
 
 
 def matches(count: int) -> str:
@@ -87,3 +108,10 @@ def hit_line(section: Section, count: int) -> str:
 def render_hits(hits: list[tuple[Section, int]], indent: str = "") -> str:
     """One line per matching section."""
     return "".join(f"{indent}{hit_line(s, n)}\n" for s, n in hits)
+
+
+def render_matches(found: list[tuple[Section, list[str]]], lines: int, indent: str = "") -> str:
+    """One line per matching section, then up to ``lines`` of its matching lines."""
+    return "".join(
+        f"{indent}{hit_line(s, len(m))}{snippets(m, lines, indent + '  ')}\n" for s, m in found
+    )
