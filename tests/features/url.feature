@@ -18,7 +18,7 @@ Feature: URL sources and caching
       """
       [S1] Guide
       Welcome.
-        [S1.1] Install (1 line)
+        [S1.1] Install (1 ln)
       """
     And the server received 1 request
 

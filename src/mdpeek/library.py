@@ -19,9 +19,9 @@ bulk of a large library is visible before it is opened.
 >>> (root / "guides").mkdir()
 >>> _ = (root / "guides" / "install.md").write_text("# Install\\n## Linux\\nRun it.\\n")
 >>> print(Library.from_path(root).tree().replace(str(root), "docs"), end="")
-docs/ Handbook (2 files, 1 dir, 4 lines)
-  README.md Handbook (1 line)
-  guides/ (1 file, 3 lines)
+docs/ Handbook (2 files, 1 dir, 4 ln)
+  README.md Handbook (1 ln)
+  guides/ (1 file, 3 ln)
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ from pathlib import Path
 
 from mdpeek.model import Document, Section
 from mdpeek.search import hit_line, matches, section_hits
+from mdpeek.units import count
 
 INDENT = "  "
 DEFAULT_LEVELS = 1
@@ -292,7 +293,7 @@ class Library:
             lines = lines_of(node)
             if lines:
                 groups.append(_Group(self.relative(node), node, [(line, 1) for line in lines]))
-        return self.grouped(groups, lambda n: _plural(n, word), word, first, budget)
+        return self.grouped(groups, lambda n: count(n, word), word, first, budget)
 
     def grouped(
         self,
@@ -330,7 +331,7 @@ class Library:
         first: int | None,
     ) -> list[str]:
         total = sum(g.count for g in groups)
-        details = [unit(total)] + ([f"in {_plural(len(groups), 'file')}"] if groups else [])
+        details = [unit(total)] + ([f"in {count(len(groups), 'file')}"] if groups else [])
         out = [f"{self.display} ({' '.join(details)})"]
         shown = groups if first is None else groups[:first]
         for group in shown:
@@ -340,14 +341,14 @@ class Library:
             hidden = group.children[len(children) :]
             if hidden:
                 weight = sum(w for _, w in hidden)
-                more = [_plural(len(hidden), child_word)]
-                if unit(weight) != _plural(weight, child_word):
+                more = [count(len(hidden), child_word)]
+                if unit(weight) != count(weight, child_word):
                     more.append(unit(weight))
                 out.append(f"{INDENT * 2}… {len(hidden)} more ({', '.join(more)})")
         rest = groups[len(shown) :]
         if rest:
-            count = sum(g.count for g in rest)
-            out.append(f"{INDENT}… {len(rest)} more ({_plural(len(rest), 'file')}, {unit(count)})")
+            weight = sum(g.count for g in rest)
+            out.append(f"{INDENT}… {len(rest)} more ({count(len(rest), 'file')}, {unit(weight)})")
         return out
 
     def relative(self, node: FileNode) -> str:
@@ -612,33 +613,29 @@ def glob_match(path: str, pattern: str) -> bool:
     return _glob_regex(pattern).fullmatch(path) is not None
 
 
-def _plural(count: int, word: str) -> str:
-    return f"{count} {word}" if count == 1 else f"{count} {word}s"
-
-
 def _labelled(name: str, title: Title | None, details: list[str]) -> str:
     label = f"{name} {title}" if title is not None and str(title) else name
     return f"{label} ({', '.join(details)})"
 
 
 def _dir_line(node: DirNode, name: str) -> str:
-    details = [_plural(node.file_count, "file")]
+    details = [count(node.file_count, "file")]
     if node.dir_count:
-        details.append(_plural(node.dir_count, "dir"))
+        details.append(count(node.dir_count, "dir"))
     if node.file_count:
-        details.append(_plural(node.line_count, "line"))
+        details.append(count(node.line_count, "line"))
     return _labelled(name, node.title, details)
 
 
 def _file_line(node: FileNode) -> str:
-    details = [_plural(node.line_count, "line")]
+    details = [count(node.line_count, "line")]
     sections = node.section_count()
     if sections:
-        details.append(_plural(sections, "section"))
+        details.append(count(sections, "section"))
     if node.doc.tables:
-        details.append(_plural(len(node.doc.tables), "table"))
+        details.append(count(len(node.doc.tables), "table"))
     if node.doc.diagrams:
-        details.append(_plural(len(node.doc.diagrams), "diagram"))
+        details.append(count(len(node.doc.diagrams), "diagram"))
     return _labelled(node.name, node.title, details)
 
 
@@ -661,10 +658,10 @@ def _render_entries(node: DirNode, indent_level: int, opts: _TreeOptions, out: l
         files = [e for e in hidden if isinstance(e, FileNode)]
         details = []
         if dirs:
-            details.append(_plural(len(dirs), "dir"))
+            details.append(count(len(dirs), "dir"))
         if files:
-            details.append(_plural(len(files), "file"))
-        details.append(_plural(sum(e.line_count for e in hidden), "line"))
+            details.append(count(len(files), "file"))
+        details.append(count(sum(e.line_count for e in hidden), "line"))
         out.append(f"{indent}… {len(hidden)} more ({', '.join(details)})")
 
 
@@ -707,9 +704,9 @@ def _render_headings(
         if at_limit and section.children:
             details.append(f"{len(section.children)} sub")
         for items, word in ((node.doc.tables, "table"), (node.doc.diagrams, "diagram")):
-            count = sum(1 for item in items if item.section_id == section.id)
-            if count:
-                details.append(_plural(count, word))
+            n = sum(1 for item in items if item.section_id == section.id)
+            if n:
+                details.append(count(n, word))
         out.append(f"{indent}[{section.id}] {section.title}".rstrip() + f" ({', '.join(details)})")
         if not at_limit:
             _render_headings(node, section.children, indent_level + 1, rel_depth + 1, opts, out)
@@ -717,6 +714,5 @@ def _render_headings(
     if hidden:
         span = sum(s.end - s.start for s in hidden)
         out.append(
-            f"{indent}… {len(hidden)} more ({_plural(len(hidden), 'section')}, "
-            f"{_plural(span, 'line')})"
+            f"{indent}… {len(hidden)} more ({count(len(hidden), 'section')}, {count(span, 'line')})"
         )

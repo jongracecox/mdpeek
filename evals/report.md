@@ -7,13 +7,13 @@ Each scenario's calls are scripted, so these are best-case numbers: a real agent
 | Scenario | Question | Calls | ~Tokens | vs whole file | Answer |
 |---|---|---|---|---|---|
 | chapter-list | What chapters does the handbook have? | 1 | 111 | 0.2% | found |
-| retry-limit | What is the default network retry limit? | 3 | 665 | 1.1% | found |
-| rotate-keys | How do I rotate API keys? | 3 | 590 | 1.0% | found |
-| error-code | What does error E104 mean? | 2 | 180 | 0.3% | found |
-| depot-capacity | What is the capacity of depot D-0217? | 3 | 209 | 0.4% | found |
-| depots-per-region | How many depots does each region have? | 2 | 124 | 0.2% | found |
-| sensor-calibration | What is the channel 9 calibration offset for sensor S-14? | 2 | 122 | 0.2% | found |
-| dispatch-flow | What happens when a beacon doesn't confirm a dispatch? | 3 | 591 | 1.0% | found |
-| install-command | What command installs the command line tools? | 3 | 147 | 0.2% | found |
+| retry-limit | What is the default network retry limit? | 3 | 660 | 1.1% | found |
+| rotate-keys | How do I rotate API keys? | 3 | 585 | 1.0% | found |
+| error-code | What does error E104 mean? | 2 | 149 | 0.2% | found |
+| depot-capacity | What is the capacity of depot D-0217? | 3 | 207 | 0.3% | found |
+| depots-per-region | How many depots does each region have? | 2 | 97 | 0.2% | found |
+| sensor-calibration | What is the channel 9 calibration offset for sensor S-14? | 2 | 91 | 0.2% | found |
+| dispatch-flow | What happens when a beacon doesn't confirm a dispatch? | 3 | 585 | 1.0% | found |
+| install-command | What command installs the command line tools? | 3 | 146 | 0.2% | found |
 
-All 9 scenarios together: ~2,739 tokens, 0.5% of reading the whole file once per question (~536,517 tokens).
+All 9 scenarios together: ~2,631 tokens, 0.5% of reading the whole file once per question (~536,517 tokens).

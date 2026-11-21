@@ -2,7 +2,7 @@
 
 Diagram source is rarely useful to read inline and mostly styling, so view
 and full output replace every diagram with one line, such as
-``[D1] mermaid flowchart (19 lines)``. ``--diagram D1`` shows the source.
+``[D1] mermaid flowchart (19 ln)``. ``--diagram D1`` shows the source.
 
 As with headings and tables, only diagrams at the top block level count; a
 diagram inside a blockquote or list item stays plain content. IDs ``D1..Dn``
@@ -16,6 +16,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from markdown_it.token import Token
+
+from mdpeek.units import count as count_of
 
 LANGUAGES = {
     "mermaid": "mermaid",
@@ -141,7 +143,7 @@ def _first_title(lines: Sequence[str]) -> str | None:
 
 
 def summary(diagram: Diagram, *, with_section: bool = False) -> str:
-    """One-line description, e.g. ``[D1] mermaid flowchart "Flow" (19 lines)``."""
+    """One-line description, e.g. ``[D1] mermaid flowchart "Flow" (19 ln)``."""
     parts = [f"[{diagram.id}]"]
     if with_section:
         parts.append(diagram.section_id)
@@ -151,5 +153,5 @@ def summary(diagram: Diagram, *, with_section: bool = False) -> str:
     if diagram.title:
         parts.append(f'"{diagram.title}"')
     count = diagram.line_count
-    parts.append(f"({count} line)" if count == 1 else f"({count} lines)")
+    parts.append(f"({count_of(count, 'line')})")
     return " ".join(parts)

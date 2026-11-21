@@ -13,7 +13,7 @@ Feature: Malformed tables
     When I run "mdpeek doc.md --tables"
     Then the output is:
       """
-      [T1] S0 table 2 cols × 2 rows: a, b (2 ragged rows fixed)
+      [T1] S0 2×2: a, b (2 ragged rows fixed)
       """
 
   Scenario: Text without a delimiter row is not a table
@@ -47,8 +47,8 @@ Feature: Malformed tables
 
     Examples:
       | policy  | output                                                                                                   |
-      | show    | [S1] Data\nBefore.\n\n[T1!] table not parsed: simulated parse failure, raw text below\n\| a \| b \|\n\|---\|---\|\n\| 1 \| 2 \|\n\nAfter. |
-      | summary | [S1] Data\nBefore.\n\n[T1!] table not parsed: simulated parse failure\n\nAfter.                            |
+      | show    | [S1] Data\nBefore.\n\n[T1!] not parsed: simulated parse failure, raw text below\n\| a \| b \|\n\|---\|---\|\n\| 1 \| 2 \|\n\nAfter. |
+      | summary | [S1] Data\nBefore.\n\n[T1!] not parsed: simulated parse failure\n\nAfter.                            |
       | exclude | [S1] Data\nBefore.\n\n\nAfter.                                                                            |
 
   Scenario: Opening a table that cannot be parsed shows the raw text
@@ -62,7 +62,7 @@ Feature: Malformed tables
     When I run "mdpeek doc.md --table T1"
     Then the output is:
       """
-      [T1!] S0 table not parsed: simulated parse failure
+      [T1!] S0 not parsed: simulated parse failure
       | a | b |
       |---|---|
       | 1 | 2 |

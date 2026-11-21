@@ -21,6 +21,7 @@ from typing import Any
 from markdown_it.token import Token
 
 from mdpeek.options import OnTableError, coerce
+from mdpeek.units import shape
 
 Value = int | float | str | None
 
@@ -286,23 +287,17 @@ def _convert(cell: str, kind: str) -> Value:
 
 
 def summary(table: Table, settings: TableSettings, *, with_section: bool = False) -> str:
-    """One-line description of a table, e.g. ``[T1] table 4 cols × 32 rows: a, b``."""
+    """One-line description of a table, e.g. ``[T1] 4×32: a, b`` (columns × rows)."""
     where = f" {table.section_id}" if with_section else ""
     if not table.ok:
-        return f"[{table.id}!]{where} table not parsed: {table.error}"
-    text = (
-        f"[{table.id}]{where} table {_plural(table.n_cols, 'col')} × {_plural(table.n_rows, 'row')}"
-    )
+        return f"[{table.id}!]{where} not parsed: {table.error}"
+    text = f"[{table.id}]{where} {shape(table.n_cols, table.n_rows)}"
     joined = ", ".join(table.display_headers(settings.raw_column_names))
     if table.n_cols <= settings.max_cols and len(joined) <= settings.header_max_chars:
         text += f": {joined}"
     if table.warnings:
         text += f" ({'; '.join(table.warnings)})"
     return text
-
-
-def _plural(count: int, noun: str) -> str:
-    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
 def should_summarise(table: Table, settings: TableSettings) -> bool:

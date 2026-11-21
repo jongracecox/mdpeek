@@ -50,7 +50,8 @@ src/mdpeek/
 ├── search.py        # --grep: sections with matching lines
 ├── source.py        # load from path, URL (fetch + cache) or stdin
 ├── table_output.py  # --table / --tables selection and formatting
-└── tables.py        # table extraction, typing, summaries
+├── tables.py        # table extraction, typing, summaries
+└── units.py         # abbreviated counts: 53 ln, 6 sec, 4×32
 tests/
 ├── features/           # Gherkin specs of CLI behaviour
 ├── step_defs/          # shared pytest-bdd steps for the features

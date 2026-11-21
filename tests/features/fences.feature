@@ -32,10 +32,10 @@ Feature: Fenced blocks
     When I run "mdpeek doc.md --fences"
     Then the output is:
       """
-      [F1] S1 bash (1 line)
-      [F2] S1.1 toml (2 lines)
-      [F3] S1.1 mermaid (2 lines) = D1
-      [F4] S1.1 plain (1 line)
+      [F1] S1 bash (1 ln)
+      [F2] S1.1 toml (2 ln)
+      [F3] S1.1 mermaid (2 ln) = D1
+      [F4] S1.1 plain (1 ln)
       """
 
   Scenario: Pulling one block prints its bare source
@@ -50,12 +50,12 @@ Feature: Fenced blocks
     When I run "mdpeek doc.md --fence F1 --fence F4"
     Then the output is:
       """
-      [F1] S1 bash (1 line)
+      [F1] S1 bash (1 ln)
       ```bash
       pip install example
       ```
 
-      [F4] S1.1 plain (1 line)
+      [F4] S1.1 plain (1 ln)
       ```
       plain block
       ```
@@ -65,7 +65,7 @@ Feature: Fenced blocks
     When I run "mdpeek doc.md --fences -s S1.1 --full"
     Then the output contains:
       """
-      [F4] S1.1 plain (1 line)
+      [F4] S1.1 plain (1 ln)
       ```
       plain block
       ```

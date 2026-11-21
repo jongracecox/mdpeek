@@ -48,7 +48,7 @@ Feature: Navigating a large document
     When I run "mdpeek handbook.md -s S5.2"
     Then the output contains:
       """
-      [T3] table 6 cols × 320 rows: depot_id, city, region, capacity_t, opened, manager
+      [T3] 6×320: depot_id, city, region, capacity_t, opened, manager
       """
     When I run "mdpeek handbook.md --engine sqlite --sql "select city, capacity_t from t3 where depot_id = 'D-0217'""
     Then the output is:
@@ -62,7 +62,7 @@ Feature: Navigating a large document
     When I run "mdpeek handbook.md --table T4 --rows 14 --cols sensor,ch_09"
     Then the output is:
       """
-      [T4] S6.2.1 table 24 cols × 40 rows
+      [T4] S6.2.1 24×40
       columns: sensor TEXT, ch_09 REAL
       | sensor | ch_09 |
       |---|---|

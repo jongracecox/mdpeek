@@ -32,6 +32,7 @@ from mdpeek.table_output import (
     truncation_note,
 )
 from mdpeek.tables import SelectionError, TableNotFound, TableSettings
+from mdpeek.units import count
 
 EXIT_USAGE = 2
 
@@ -418,7 +419,9 @@ def _budget_note(
         return
     lines = result.text.count("\n")
     if lines > budget:
-        message = f"-n {result.first} is {lines} lines, the smallest, over --budget {budget}"
+        message = (
+            f"-n {result.first} is {count(lines, 'line')}, the smallest, over --budget {budget}"
+        )
     else:
         message = (
             f"showing -n {result.first} to fit --budget {budget} "
@@ -430,7 +433,7 @@ def _budget_note(
 _LIST_KINDS = {  # list flag -> (item word, the file renderer for its items)
     "tables": "table",
     "diagrams": "diagram",
-    "fences": "fenced block",
+    "fences": "fence",
 }
 
 
@@ -510,14 +513,14 @@ def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
     fit = library.fit(budget, levels=args.levels, depth=args.depth, first=args.first)
     if fit.lines > budget:
         print(
-            f"mdpeek: tree: {fit.flags()} is {fit.lines} lines, the smallest tree, "
+            f"mdpeek: tree: {fit.flags()} is {count(fit.lines, 'line')}, the smallest tree, "
             f"over --budget {budget}",
             file=sys.stderr,
         )
-    elif fit.next_step:
+    elif fit.next_step and fit.next_lines is not None:
         print(
             f"mdpeek: tree: showing {fit.flags()} to fit --budget {budget}; "
-            f"{fit.next_step} is {fit.next_lines} lines",
+            f"{fit.next_step} is {count(fit.next_lines, 'line')}",
             file=sys.stderr,
         )
     return library.tree(levels=fit.levels, first=fit.first, depth=fit.depth or None)

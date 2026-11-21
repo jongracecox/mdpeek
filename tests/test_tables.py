@@ -88,9 +88,9 @@ def test_tables_in_scope(doc):
 @pytest.mark.parametrize(
     ("table_id", "expected"),
     [
-        ("T1", "[T1] table 2 cols × 2 rows: key, value"),
-        ("T2", "[T2] table 3 cols × 30 rows: id, label, ratio"),
-        ("T3", "[T3] table 10 cols × 1 row"),
+        ("T1", "[T1] 2×2: key, value"),
+        ("T2", "[T2] 3×30: id, label, ratio"),
+        ("T3", "[T3] 10×1"),
     ],
 )
 def test_summary_lines(doc, table_id, expected):
@@ -100,16 +100,15 @@ def test_summary_lines(doc, table_id, expected):
 def test_summary_drops_long_headers():
     headers = " | ".join(["a_very_long_column_name_here"] * 4)
     doc = Document.from_text(f"| {headers} |\n|---|---|---|---|\n| 1 | 2 | 3 | 4 |\n")
-    assert summary(doc.tables[0], TableSettings()) == "[T1] table 4 cols × 1 row"
+    assert summary(doc.tables[0], TableSettings()) == "[T1] 4×1"
     assert summary(doc.tables[0], TableSettings(header_max_chars=200)).startswith(
-        "[T1] table 4 cols × 1 row: a_very"
+        "[T1] 4×1: a_very"
     )
 
 
 def test_summary_with_section_and_warnings(doc):
     assert summary(doc.table("T4"), TableSettings(), with_section=True) == (
-        "[T4] S1.3 table 3 cols × 4 rows: name, note, code "
-        "(2 ragged rows fixed; bad characters removed from 1 cell)"
+        "[T4] S1.3 3×4: name, note, code (2 ragged rows fixed; bad characters removed from 1 cell)"
     )
 
 
@@ -144,15 +143,15 @@ def test_failed_table_keeps_its_id(failing_t2, fixture_text):
     assert not t2.ok
     assert t2.error == "forced failure"
     assert summary(t2, TableSettings(), with_section=True) == (
-        "[T2!] S1.1 table not parsed: forced failure"
+        "[T2!] S1.1 not parsed: forced failure"
     )
 
 
 @pytest.mark.parametrize(
     ("policy", "expected_start"),
     [
-        ("show", ["[S1.1] Deep", "[T2!] table not parsed: forced failure, raw text below", "| id"]),
-        ("summary", ["[S1.1] Deep", "[T2!] table not parsed: forced failure"]),
+        ("show", ["[S1.1] Deep", "[T2!] not parsed: forced failure, raw text below", "| id"]),
+        ("summary", ["[S1.1] Deep", "[T2!] not parsed: forced failure"]),
         ("exclude", ["[S1.1] Deep"]),
     ],
 )
@@ -169,7 +168,7 @@ def test_view_replaces_large_tables_and_labels_small_ones(doc):
     assert out[:4] == ["[S1] Tables", "Narrow table stays inline.", "", "[T1]"]
     assert doc.full(sections=["S1.1"]).splitlines() == [
         "[S1.1] Deep",
-        "[T2] table 3 cols × 30 rows: id, label, ratio",
+        "[T2] 3×30: id, label, ratio",
     ]
 
 
@@ -180,8 +179,8 @@ def test_no_summaries_shows_tables_verbatim(doc):
 
 
 def test_structure_and_stubs_count_tables(doc):
-    assert doc.structure(depth=1) == "[S1] Tables (6, 4 sub, 1 table)\n"
-    assert "  [S1.1] Deep (32 lines, 1 table)" in doc.view().splitlines()
+    assert doc.structure(depth=1) == "[S1] Tables (6, 4 sub, 1 tbl)\n"
+    assert "  [S1.1] Deep (32 ln, 1 tbl)" in doc.view().splitlines()
 
 
 @pytest.mark.parametrize(

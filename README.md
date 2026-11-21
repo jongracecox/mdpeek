@@ -48,13 +48,16 @@ $ mdpeek guide.md --structure
 $ mdpeek guide.md -s S1.2
 [S1.2] Reference
 Reference intro...
-  [S1.2.1] API (18 lines)
+  [S1.2.1] API (18 ln)
 ```
 
 - Section IDs (`S1`, `S1.2.1`) come from the heading structure only, never
   from heading text, so they are unambiguous even when headings repeat or
   carry their own numbering. Content before the first heading is `S0`.
 - Line counts are each section's own lines, excluding subsections.
+- Counts are abbreviated, because they repeat on every line of a large scan:
+  `ln` lines, `sec` sections, `tbl` tables, `diag` diagrams. A table's size
+  is columns × rows: `6×320`.
 
 | Command | Shows |
 |---|---|
@@ -84,7 +87,7 @@ worth reading inline and is mostly styling.
 $ mdpeek README.md -s S1.6.2
 [S1.6.2] Thresholds
 ...
-[D1] mermaid flowchart (19 lines)
+[D1] mermaid flowchart (19 ln)
 
 $ mdpeek README.md --diagram D1
 flowchart LR
@@ -110,9 +113,9 @@ output; this is an inventory and a shortcut.
 
 ```console
 $ mdpeek README.md --fences
-[F1] S1.3.1 bash (1 line)
-[F2] S1.3.2 python (11 lines)
-[F7] S1.6.2 mermaid (19 lines) = D1
+[F1] S1.3.1 bash (1 ln)
+[F2] S1.3.2 python (11 ln)
+[F7] S1.6.2 mermaid (19 ln) = D1
 ...
 $ mdpeek README.md --fences | grep python     # filter with the usual tools
 $ mdpeek README.md --fence F1 | sh               # one block: just the source
@@ -186,28 +189,28 @@ is named by its path, so you open anything you see by pointing mdpeek at it.
 
 ```console
 $ mdpeek docs/ -L 1
-docs/ Handbook (9 files, 3 dirs, 37 lines)
-  README.md Handbook (2 lines)
-  guides/ Guides (4 files, 1 dir, 16 lines)
-  reference/ (2 files, 8 lines)
-  changelog.md Changelog (5 lines, 2 sections)
-  notes.md Part one +2 (6 lines, 3 sections)
+docs/ Handbook (9 files, 3 dirs, 37 ln)
+  README.md Handbook (2 ln)
+  guides/ Guides (4 files, 1 dir, 16 ln)
+  reference/ (2 files, 8 ln)
+  changelog.md Changelog (5 ln, 2 sec)
+  notes.md Part one +2 (6 ln, 3 sec)
 
 $ mdpeek docs/ -L 2 -n 2
-docs/ Handbook (9 files, 3 dirs, 37 lines)
-  README.md Handbook (2 lines)
-  guides/ Guides (4 files, 1 dir, 16 lines)
-    README.md Guides (2 lines)
-    advanced/ (1 file, 2 lines)
-    … 2 more (2 files, 12 lines)
-  … 3 more (1 dir, 2 files, 19 lines)
+docs/ Handbook (9 files, 3 dirs, 37 ln)
+  README.md Handbook (2 ln)
+  guides/ Guides (4 files, 1 dir, 16 ln)
+    README.md Guides (2 ln)
+    advanced/ (1 file, 2 ln)
+    … 2 more (2 files, 12 ln)
+  … 3 more (1 dir, 2 files, 19 ln)
 
 $ mdpeek docs/guides -d 1
-docs/guides/ Guides (4 files, 1 dir, 16 lines)
-  README.md Guides (2 lines)
-  advanced/ (1 file, 2 lines)
-  deploy.md Deploy (7 lines, 1 table)
-  install.md Install (5 lines, 2 sections)
+docs/guides/ Guides (4 files, 1 dir, 16 ln)
+  README.md Guides (2 ln)
+  advanced/ (1 file, 2 ln)
+  deploy.md Deploy (7 ln, 1 tbl)
+  install.md Install (5 ln, 2 sec)
     [S1.1] Linux (1)
     [S1.2] macOS (1)
 
@@ -241,14 +244,14 @@ Second.
   adds heading levels once every directory is shown. If even the top level
   is too long, it shows the first N entries that fit. A note on stderr says
   what it chose and what the next step would cost, e.g.
-  `mdpeek: tree: showing -L 2 to fit --budget 150; -L 3 is 161 lines`.
+  `mdpeek: tree: showing -L 2 to fit --budget 150; -L 3 is 161 ln`.
   Giving `-L`, `-d` or `-n` without `--budget` turns the budget off.
 - **Titles:** a file is labelled with its only top-level heading, or the
   first of several with `+N` for the rest. A directory takes its title from
   its `README.md` (or `index.md`), which is listed first.
 - **Totals:** directories count every file, subdirectory and line below
   them, so the bulk of a large library is visible before you open it.
-  A file's `sections` don't count its title.
+  A file's `sec` count doesn't include its title.
 - **Headings** with `-d` start below a file's title, so `-d 1` shows a
   single-title file's `##` sections. A file with several top-level headings
   lists those instead. Section IDs are the file's own, so `PATH#S1.2` from
@@ -305,11 +308,11 @@ one-line summary and an ID. Small tables stay inline under their ID.
 ```console
 $ mdpeek report.md -s S2
 [S2] Results
-[T3] table 12 cols × 480 rows
-[T4] table 3 cols × 20 rows: region, revenue, growth
+[T3] 12×480
+[T4] 3×20: region, revenue, growth
 
 $ mdpeek report.md --table T4 --rows 1-3
-[T4] S2 table 3 cols × 20 rows
+[T4] S2 3×20
 columns: region TEXT, revenue REAL, growth REAL
 | region | revenue | growth |
 |---|---|---|

@@ -49,7 +49,7 @@ def test_preview_respects_a_smaller_limit(doc):
 def test_markdown_block_has_header_schema_and_rows(doc):
     out = render_table(select(doc.table("T2"), rows="2"), "md")
     assert out == (
-        "[T2] S1.1 table 3 cols × 30 rows\n"
+        "[T2] S1.1 3×30\n"
         "columns: id INTEGER, label TEXT, ratio REAL\n"
         "| id | label | ratio |\n|---|---|---|\n| 2 | item 2 | 2.5 |\n"
     )
@@ -86,7 +86,7 @@ def test_csv_is_plain_data(doc):
 def test_list_lines_and_json(doc):
     settings = TableSettings()
     lines = render_table_list(doc.tables, settings, "md").splitlines()
-    assert lines[0] == "[T1] S1 table 2 cols × 2 rows: key, value"
+    assert lines[0] == "[T1] S1 2×2: key, value"
     objects = json.loads(render_table_list(doc.tables, settings, "json"))
     assert [o["id"] for o in objects] == ["T1", "T2", "T3", "T4"]
     assert objects[3]["warnings"] == ["2 ragged rows fixed", "bad characters removed from 1 cell"]
@@ -101,7 +101,7 @@ def test_failed_table_output(monkeypatch, fixture_text):
     )
     doc = Document.from_text(fixture_text("tables.md"))
     out = render_table(select(doc.table("T1")), "md")
-    assert out.splitlines()[:2] == ["[T1!] S1 table not parsed: boom", "| key | value |"]
+    assert out.splitlines()[:2] == ["[T1!] S1 not parsed: boom", "| key | value |"]
     data = json.loads(render_table(select(doc.table("T1")), "json"))
     assert data["error"] == "boom"
     assert data["raw"].startswith("| key | value |\n")

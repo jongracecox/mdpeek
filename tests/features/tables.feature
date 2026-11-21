@@ -45,9 +45,9 @@ Feature: Tables in document output
       |-----|-------|
       | a | 1 |
         [S1.1] Wide
-      [T2] table 7 cols × 1 row
+      [T2] 7×1
         [S1.2] Deep
-      [T3] table 2 cols × 11 rows: id, name
+      [T3] 2×11: id, name
       """
 
   Scenario: Inline tables show SQL column names unless raw names are asked for
@@ -80,9 +80,9 @@ Feature: Tables in document output
     When I run "mdpeek doc.md --structure"
     Then the output is:
       """
-      [S1] Data (5, 1 table)
-        [S1.1] Wide (3, 1 table)
-        [S1.2] Deep (13, 1 table)
+      [S1] Data (5, 1 tbl)
+        [S1.1] Wide (3, 1 tbl)
+        [S1.2] Deep (13, 1 tbl)
       """
 
   Scenario: A table inside a blockquote is ordinary content

@@ -1,11 +1,11 @@
 {
   "chapter-list": 111,
-  "retry-limit": 665,
-  "rotate-keys": 590,
-  "error-code": 180,
-  "depot-capacity": 209,
-  "depots-per-region": 124,
-  "sensor-calibration": 122,
-  "dispatch-flow": 591,
-  "install-command": 147
+  "retry-limit": 660,
+  "rotate-keys": 585,
+  "error-code": 149,
+  "depot-capacity": 207,
+  "depots-per-region": 97,
+  "sensor-calibration": 91,
+  "dispatch-flow": 585,
+  "install-command": 146
 }

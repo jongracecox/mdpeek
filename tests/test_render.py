@@ -63,5 +63,5 @@ def test_from_path_keeps_line_endings(tmp_path):
 def test_stub_pluralisation():
     doc = Document.from_text("# A\n## One\nx\n## Two\nx\ny\n## None\n")
     assert doc.view() == (
-        "[S1] A\n  [S1.1] One (1 line)\n  [S1.2] Two (2 lines)\n  [S1.3] None (0 lines)\n"
+        "[S1] A\n  [S1.1] One (1 ln)\n  [S1.2] Two (2 ln)\n  [S1.3] None (0 ln)\n"
     )

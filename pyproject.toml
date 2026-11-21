@@ -68,8 +68,9 @@ target-version = "py311"
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
-# Table summaries deliberately use the multiplication sign: "4 cols × 32 rows".
+# Table sizes deliberately use the multiplication sign: "4×32" (columns × rows).
 "src/mdpeek/tables.py" = ["RUF001", "RUF002"]
+"src/mdpeek/units.py" = ["RUF001", "RUF002"]
 "tests/**" = ["RUF001"]
 
 [tool.pytest.ini_options]
