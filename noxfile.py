@@ -15,7 +15,7 @@ nox.options.default_venv_backend = "uv"
 nox.options.reuse_existing_virtualenvs = True
 nox.options.sessions = ["tests"]
 
-PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
+PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
 
 
 @nox.session(python=PYTHON_VERSIONS)
@@ -57,3 +57,28 @@ def eval(session: nox.Session) -> None:
     )
     session.run("python", "scripts/gen_handbook.py", "--check")
     session.run("python", "scripts/eval.py", "--check")
+
+
+MCP_LIBRARIES = {"mcp1": "mcp>=1.10,<2", "mcp2": "mcp>=2,<3", "fastmcp": "fastmcp>=2.10"}
+
+
+@nox.session(python=[PYTHON_VERSIONS[0], PYTHON_VERSIONS[-1]])
+@nox.parametrize("library", list(MCP_LIBRARIES))
+def tests_mcp(session: nox.Session, library: str) -> None:
+    """Register the MCP tool on a real server, once per MCP library."""
+    session.run_install(
+        "uv",
+        "sync",
+        "--active",
+        "--group=dev",
+        env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
+    )
+    session.install(MCP_LIBRARIES[library])
+    session.run(
+        "pytest",
+        "tests/test_mcp_contract.py",
+        "tests/test_mcp.py",
+        "-o",
+        "addopts=--strict-markers -v",
+        *session.posargs,
+    )

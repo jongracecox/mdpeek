@@ -35,7 +35,23 @@ The `duckdb` extra, for table queries, is only available with `uv` or `pipx`:
 
 ## Usage
 
-Start with the outline, then open only the sections you need:
+Run mdpeek on a file or directory with no options for the most useful first
+look that fits in 150 lines. A short file is shown whole; a long one shows
+its top-level content, or its outline if even that is too long. Directories
+show a tree with each file's title and summary. Either way, stderr ends with
+suggestions for what to run next, using real section IDs and paths:
+
+```console
+$ mdpeek handbook.md
+[S1] Introduction
+...
+mdpeek: top-level content shown: the file is 4283 ln, over the 150-line budget
+mdpeek: next: mdpeek handbook.md -s S11  (open a section; add --full for all of it)
+mdpeek:       mdpeek handbook.md --grep 'term1|term2'  (sections that mention any term)
+mdpeek:       mdpeek handbook.md --structure  (the whole outline)
+```
+
+From there, open only the sections you need:
 
 ```console
 $ mdpeek guide.md --structure
@@ -61,8 +77,8 @@ Reference intro...
 
 | Command | Shows |
 |---|---|
-| `mdpeek FILE` | top-level content, with the next level as stubs |
-| `mdpeek FILE -d N` | content down to depth N, stubs for depth N+1 |
+| `mdpeek FILE` | the whole file if it fits in 150 lines; else top-level content, else the outline; then suggestions |
+| `mdpeek FILE -d N` | content down to depth N, stubs for depth N+1 (`-d 1` is the top level) |
 | `mdpeek FILE --structure [-d N]` | headings and line counts only |
 | `mdpeek FILE --full [-d N]` | all content (down to depth N) |
 | `mdpeek FILE -s ID [-s ID ...]` | only those sections; depth counts from each |
@@ -246,9 +262,17 @@ Second.
   what it chose and what the next step would cost, e.g.
   `mdpeek: tree: showing -L 2 to fit --budget 150; -L 3 is 161 ln`.
   Giving `-L`, `-d` or `-n` without `--budget` turns the budget off.
-- **Titles:** a file is labelled with its only top-level heading, or the
-  first of several with `+N` for the rest. A directory takes its title from
-  its `README.md` (or `index.md`), which is listed first.
+- **Titles:** a file is labelled with its front matter `title`, else its
+  only top-level heading, or the first of several with `+N` for the rest. A
+  directory takes its title from its `README.md` (or `index.md`), which is
+  listed first.
+- **Summaries:** each file's line ends with a one-line summary: its front
+  matter `summary` (or `description`), else the first sentence of its first
+  paragraph, else its first section headings. `--no-summaries` leaves them
+  out.
+- **Next steps:** after the tree, stderr suggests commands to run next: a
+  grep across the files, the largest file, more heading detail, and tables
+  if there are any.
 - **Totals:** directories count every file, subdirectory and line below
   them, so the bulk of a large library is visible before you open it.
   A file's `sec` count doesn't include its title.
@@ -367,17 +391,54 @@ $ mdpeek report.md --sql "select region from t4 where growth > 0.1"
 
 ## Claude Code plugin
 
-This repository is also a Claude Code plugin marketplace. The plugin adds a
-skill that tells Claude to use mdpeek on large markdown files, docs URLs and
-markdown directories instead of reading them whole:
+This repository is also a Claude Code plugin marketplace. The plugin adds two
+skills:
+
+- **`mdpeek`**: use mdpeek on large markdown files, docs URLs and markdown
+  directories instead of reading them whole.
+- **`doc-search`**: a strategy for answering questions from a documentation
+  library, where the answer is often split across several files. Survey the
+  whole library with mdpeek, search wide, read the relevant files with the
+  usual tools, chase caveats and later changes into other documents, and
+  check every part of the question before answering.
 
 ```text
 /plugin marketplace add jongracecox/mdpeek
 /plugin install mdpeek@mdpeek
 ```
 
-The skill needs `mdpeek` on your `PATH` (any install method above), or falls
+To have Claude use `doc-search` without being asked, add this to your
+`CLAUDE.md`:
+
+```markdown
+## Documentation
+
+When answering a question from a documentation directory you haven't searched
+before, use the doc-search skill first.
+```
+
+In testing on a 175-file library, agents with this note loaded the skill in
+nearly every session. They answered more of each question correctly than with
+the same tools and no skill, and more than with a one-line "use mdpeek" hint,
+which made them stop searching sooner.
+
+The skills need `mdpeek` on your `PATH` (any install method above), or fall
 back to `uvx mdpeek`.
+
+## MCP server
+
+mdpeek ships a ready-made MCP tool. Add it to a server built on the official
+`mcp` SDK or fastmcp, and agents read your docs a piece at a time:
+
+```python
+from mdpeek.mcp import Toolset
+
+Toolset(docs_dir="docs").register(server, name="docs")
+```
+
+One tool covers the map, sections, tables, search and read-only SQL. It reads
+only inside `docs_dir`, and has hooks for telemetry and access control. See
+[docs/mcp.md](docs/mcp.md).
 
 ## Python API
 

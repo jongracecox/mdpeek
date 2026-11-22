@@ -10,8 +10,9 @@ document into context.
 uv sync                                 # Install dependencies
 uv run mdpeek --version                 # Run locally
 uv run pytest                           # Unit, doctest and BDD tests with coverage
-uv run nox                              # Tests across Python 3.11–3.14
+uv run nox                              # Tests across Python 3.10–3.15
 uv run nox -s tests_duckdb              # Tests with the duckdb extra
+uv run nox -s tests_mcp                 # MCP tool on mcp 1.x, 2.x and fastmcp
 uv run nox -s eval                      # Efficiency eval vs evals/baseline.json
 prek run --all-files                    # ruff, ty and hygiene hooks
 uv tool install --force --reinstall .   # Install globally
@@ -20,7 +21,7 @@ uv tool install --force --reinstall .   # Install globally
 ## Conventions
 
 - Test fixtures are synthetic.
-- **Python ≥ 3.11.** The only runtime dependency is `markdown-it-py`. DuckDB is
+- **Python ≥ 3.10** (tested on 3.10–3.15). The only runtime dependency is `markdown-it-py`. DuckDB is
   an optional extra (`mdpeek[duckdb]`) and must be imported lazily.
 - **API options are `StrEnum`s** (in `options.py`). Functions accept either the
   enum or its string value; CLI `choices=` are derived from the enums.
@@ -30,6 +31,11 @@ uv tool install --force --reinstall .   # Install globally
 - **CLI behaviour is specified in Gherkin** (`tests/features/*.feature`, run by
   pytest-bdd). These files are the contract for a possible future Rust CLI, so
   keep step wording language-neutral.
+- **The MCP tool** (`mdpeek.mcp`, guide in `docs/mcp.md`) is specified in
+  `tests/mcp_features/` and must not import an MCP library at module level.
+  `uv run nox -s tests_mcp` checks it on mcp 1.x, mcp 2.x and fastmcp. Keep its
+  description compact (`test_description_stays_compact`): every session pays
+  for it.
 - **PRs are rebase merged**, so every commit on a branch lands on `main` as-is.
   Keep a branch to a short list of meaningful commits, one per logical change.
   Squash fixups, review tweaks and "fix typo" commits into the commit they belong

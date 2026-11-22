@@ -1,7 +1,7 @@
 import json
 import os
 import stat
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -16,7 +16,7 @@ from mdpeek.cache import (
 )
 from mdpeek.options import CacheBackend
 
-T0 = datetime(2026, 11, 20, 9, 0, tzinfo=UTC)
+T0 = datetime(2026, 11, 20, 9, 0, tzinfo=timezone.utc)
 
 
 def entry(text: str = "# A\n", at: datetime = T0) -> CacheEntry:

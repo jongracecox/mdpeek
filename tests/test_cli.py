@@ -37,3 +37,36 @@ def test_depth_must_be_a_number(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         main(["doc.md", "--depth", "two"])
     assert "must be a whole number" in capsys.readouterr().err
+
+
+def test_grep_lines_are_an_ops_option_the_cli_leaves_off(tmp_path, capsys):
+    from mdpeek import Document, ops
+
+    doc = Document.from_text("# A\nretry once\n")
+    assert ops.grep_file(doc, "retry", lines=1).text == "[S1] A (1 match)\n  > retry once\n"
+    assert ops.grep_file(doc, "retry").text == "[S1] A (1 match)\n"
+
+
+def test_a_file_too_long_for_its_top_level_shows_the_outline(tmp_path, capsys):
+    from mdpeek.cli import main
+
+    body = "".join(f"# Part {i}\nline one\nline two\n## Detail {i}\nmore\n" for i in range(80))
+    (tmp_path / "big.md").write_text(body)
+    assert main([str(tmp_path / "big.md")]) == 0
+    out, err = capsys.readouterr()
+    assert out.startswith("[S1] Part 0 (2, 1 sub)\n")  # depth 1: the deepest outline that fits
+    assert "line one" not in out
+    assert "outline shown: the file is 400 ln, over the 150-line budget" in err
+    assert err.rstrip().splitlines()[-1].startswith("mdpeek: ")
+    assert "-s S1" in err and "--grep" in err
+
+
+def test_hints_come_after_the_budget_note_and_never_on_stdout(tmp_path, capsys):
+    from mdpeek.cli import main
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("# A\n\nFirst sentence.\n")
+    assert main([str(tmp_path / "docs")]) == 0
+    out, err = capsys.readouterr()
+    assert "next:" not in out
+    assert err.splitlines()[0].startswith("mdpeek: next: ")

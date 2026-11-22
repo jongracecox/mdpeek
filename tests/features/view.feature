@@ -22,7 +22,7 @@ Feature: Default view
       """
 
   Scenario: Top-level sections with stubs for their children
-    When I run "mdpeek doc.md"
+    When I run "mdpeek doc.md -d 1"
     Then the output is:
       """
       [S1] Overview

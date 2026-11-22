@@ -168,3 +168,15 @@ def test_listing_as_json_and_reporting_unreadable_files(
         captured = capsys.readouterr()
         assert "(1 fence in 1 file)" in captured.out
         assert "b.md: Permission denied" in captured.err
+
+
+def test_front_matter_title_and_summary_label_files(tmp_path):
+    (tmp_path / "venues.md").write_text(
+        '---\ntitle: "Venues"\nsummary: Venue rows and history.\n---\n## Schema\n## Keys\n'
+    )
+    (tmp_path / "plain.md").write_text("# Plain\n\nFirst sentence here. Second.\n")
+    library = Library.from_path(tmp_path)
+    tree = library.tree(summaries=True)
+    assert "venues.md Venues (6 ln, 2 sec) — Venue rows and history." in tree
+    assert "plain.md Plain (3 ln) — First sentence here." in tree
+    assert "—" not in library.tree()

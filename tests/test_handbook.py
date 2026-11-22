@@ -2,12 +2,15 @@
 
 import importlib.util
 import sys
-import tomllib
 from pathlib import Path
 
+import pytest
 from conftest import HANDBOOK, read_fixture
 
 from mdpeek import Document
+
+# The eval script reads TOML; tomllib arrived in Python 3.11.
+tomllib = pytest.importorskip("tomllib")
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 

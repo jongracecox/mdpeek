@@ -20,7 +20,7 @@ import os
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
 
@@ -32,7 +32,7 @@ DEFAULT_TTL = 3600
 
 def now() -> datetime:
     """The current UTC time (a seam for tests)."""
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)
 
 
 def cache_key(url: str, headers: Mapping[str, str] | None = None) -> str:
@@ -144,4 +144,4 @@ def make_cache(backend: CacheBackend | str | Cache | None) -> Cache | None:
 
 def format_fetched_at(moment: datetime) -> str:
     """Compact UTC timestamp: ``2026-11-20 15:04Z``."""
-    return moment.astimezone(UTC).strftime("%Y-%m-%d %H:%MZ")
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")

@@ -12,8 +12,22 @@ with :func:`coerce`.
 
 from __future__ import annotations
 
-from enum import StrEnum
+import sys
+from enum import Enum
 from typing import TypeVar
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:  # pragma: no cover - Python 3.10
+
+    class StrEnum(str, Enum):
+        """Backport of :class:`enum.StrEnum`: members are strings and print as their value."""
+
+        def __str__(self) -> str:
+            return str(self.value)
+
+        def __format__(self, format_spec: str) -> str:
+            return str(self.value).__format__(format_spec)
 
 
 class Mode(StrEnum):

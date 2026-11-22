@@ -1,15 +1,15 @@
 # mdpeek: read large markdown a piece at a time
 
-Use mdpeek instead of reading a whole markdown file or URL: get the outline,
-then open only the parts you need.
-`mdpeek SOURCE [options]`; SOURCE is a file, directory, http(s) URL or `-`.
+Use mdpeek instead of reading whole markdown files or URLs: look first, then
+open only what you need. `mdpeek SOURCE` (a file, directory, http(s) URL or
+`-`) shows what fits in 150 lines; stderr suggests what to run next.
 
 ## Navigate
 
 ```sh
+mdpeek doc.md                       # whole if short; else top level or outline
 mdpeek doc.md --structure           # outline: [S2.1] Title (own line count)
-mdpeek doc.md --structure -d 2      # first 2 heading levels only
-mdpeek doc.md                       # top-level content, next level as stubs
+mdpeek doc.md -d 1                  # top-level content, next level as stubs
 mdpeek doc.md -s S2.1 -s S4         # those sections, subsections as stubs
 mdpeek doc.md -s S2 -d 2            # a section plus one level below it
 mdpeek doc.md -s S2 --full          # a section and all its subsections
@@ -17,10 +17,10 @@ mdpeek doc.md --grep 'retry|limit'  # sections with matching lines (regex)
 mdpeek doc.md --meta                # front matter (`[meta] (N)` in output)
 ```
 
-IDs come from heading position, never heading text. `S0` is content before
-the first heading. Line counts exclude subsections. Counts: `ln` lines,
-`sec` sections, `tbl` tables, `diag` diagrams; `6×320` is columns × rows.
-In content, large tables and diagrams appear as one-line `[Tn]` / `[Dn]` stubs.
+IDs come from heading position, not text; `S0` precedes the first heading.
+Line counts exclude subsections. `ln` lines, `sec` sections, `tbl` tables,
+`diag` diagrams; `6×320` is columns × rows. Large tables and diagrams appear
+as one-line `[Tn]` / `[Dn]` stubs.
 
 ## Tables
 
@@ -46,14 +46,14 @@ mdpeek doc.md --fence F1            # its bare source, ready to pipe
 mdpeek doc.md --fence F1 --fence F4 # several: each labelled and fenced
 ```
 
-`T`, `D` and `F` IDs are global, so don't add `-s` to `--table`, `--diagram`
-or `--fence`. `--no-diagram-summaries` shows diagrams inline. Diagrams and
-fences take `--format json|jsonl`, not csv/tsv.
+`T`, `D` and `F` IDs are global: no `-s` with `--table`, `--diagram` or
+`--fence`. `--no-diagram-summaries` shows diagrams inline. Diagrams and
+fences take `--format json|jsonl`.
 
 ## Directories
 
 ```sh
-mdpeek docs/                        # tree fitted to 150 lines; stderr says what's next
+mdpeek docs/                        # tree: each file's title and summary, fitted
 mdpeek docs/ --budget 400           # a bigger tree
 mdpeek docs/ -L 2 -n 5              # fixed: 2 levels, first 5 entries; no budget
 mdpeek docs/ -d 1                   # also each file's headings
@@ -64,15 +64,15 @@ mdpeek docs/ --table guides/deploy.md#T1             # also --diagram, --fence
 mdpeek docs/ --exclude reference --include '*.md'    # gitignore-style globs
 ```
 
-Trees show file titles and counts. `-L` limits directory
-levels, `-n` entries per level; giving `-L`, `-d` or `-n` turns the budget off. Address files as
-`PATH#ID`, relative to the directory; IDs are the file's own. `--sql` works
-on one file only.
+Titles and summaries come from front matter, else the first heading and
+sentence (`--no-summaries`). `-L` limits levels, `-n` entries; `-L`, `-d`
+or `-n` turns the budget off. Address files as `PATH#ID`, relative to the
+directory. `--sql` works on one file only.
 
 ## URLs
 
 Cached for an hour; cached output starts with `(cached ...)`.
 Options: `-H 'Name: value'`, `--refresh`, `--no-cache`, `--ttl SECONDS`.
 
-Errors and truncation notes go to stderr as `mdpeek: ...`; a bad ID or
-option exits 2. `mdpeek --help` lists every option.
+Notes and errors go to stderr as `mdpeek: ...`; a bad ID or option exits 2.
+`mdpeek --help` lists every option.

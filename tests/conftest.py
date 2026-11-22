@@ -39,6 +39,13 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         self.server.requests.append({"path": self.path, "headers": dict(self.headers)})
+        location = self.server.redirects.get(self.path)
+        if location is not None:
+            self.send_response(302)
+            self.send_header("Location", location)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         route = self.server.routes.get(self.path)
         if route is None:
             self.send_error(404, "Not Found")
@@ -56,6 +63,7 @@ class _Handler(BaseHTTPRequestHandler):
 
 class LocalServer(ThreadingHTTPServer):
     routes: dict[str, tuple[bytes, str]]
+    redirects: dict[str, str]
     requests: list[dict]
 
     @property
@@ -71,6 +79,7 @@ class LocalServer(ThreadingHTTPServer):
 def http_server():
     server = LocalServer(("127.0.0.1", 0), _Handler)
     server.routes = {}
+    server.redirects = {}
     server.requests = []
     thread = threading.Thread(
         target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True
