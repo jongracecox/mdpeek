@@ -26,7 +26,8 @@ from mdpeek.formats import format_rows, to_json
 from mdpeek.library import DEFAULT_BUDGET, FileNode, Grouped, Library, TreeFit
 from mdpeek.meta import render_meta_list
 from mdpeek.model import Document
-from mdpeek.options import Engine, Format, coerce
+from mdpeek.options import Engine, Format, Mode, coerce
+from mdpeek.render import render
 from mdpeek.search import compile_pattern, render_matches, section_matches
 from mdpeek.table_output import (
     DEFAULT_LIMIT,
@@ -36,6 +37,7 @@ from mdpeek.table_output import (
     select,
 )
 from mdpeek.tables import TableSettings
+from mdpeek.units import count
 
 ListKind = Literal["tables", "diagrams", "fences"]
 
@@ -58,6 +60,43 @@ class Output:
     query: QueryResult | None = None
     shown: int | None = None
     """Query rows shown, when ``query`` is set."""
+    view: Literal["whole", "top", "outline"] | None = None
+    """What :func:`adaptive` chose to show."""
+
+
+def _lines(text: str) -> int:
+    return text.count("\n")
+
+
+def adaptive(
+    doc: Document,
+    budget: int = DEFAULT_BUDGET,
+    settings: TableSettings | None = None,
+    diagram_summaries: bool = True,
+) -> Output:
+    """The most useful first look at ``doc`` within ``budget`` lines: the whole
+    file if it fits, else its top-level content with stubs, else the deepest
+    outline that fits.
+
+    >>> doc = Document.from_text("# A\\nOne.\\n## B\\nTwo.\\n")
+    >>> adaptive(doc).view, adaptive(doc, budget=3).view, adaptive(doc, budget=2).view
+    ('whole', 'top', 'outline')
+    """
+    whole = render(doc, Mode.FULL, None, None, settings, diagram_summaries)
+    total = count(len(doc.lines), "line")
+    if _lines(whole) <= budget:
+        return Output(whole, view="whole")
+    top = render(doc, Mode.VIEW, None, None, settings, diagram_summaries)
+    if _lines(top) <= budget:
+        note = f"top-level content shown: the file is {total}, over the {budget}-line budget"
+        return Output(top, [note], truncated=True, view="top")
+    depth = max((len(s.id.split(".")) for s in doc.walk() if not s.is_preamble), default=1)
+    outline = render(doc, Mode.STRUCTURE, depth)
+    while depth > 1 and _lines(outline) > budget:
+        depth -= 1
+        outline = render(doc, Mode.STRUCTURE, depth)
+    note = f"outline shown: the file is {total}, over the {budget}-line budget"
+    return Output(outline, [note], truncated=True, view="outline")
 
 
 def library_notes(library: Library) -> list[str]:

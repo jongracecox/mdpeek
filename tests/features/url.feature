@@ -13,7 +13,7 @@ Feature: URL sources and caching
       """
 
   Scenario: Viewing a URL
-    When I run "mdpeek {server}/guide.md"
+    When I run "mdpeek {server}/guide.md -d 1"
     Then the output is:
       """
       [S1] Guide

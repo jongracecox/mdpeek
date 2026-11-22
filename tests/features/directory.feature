@@ -7,7 +7,7 @@ Feature: Directories
     Given the fixture directory "library" as "docs"
 
   Scenario: One level of the tree
-    When I run "mdpeek docs -L 1"
+    When I run "mdpeek docs -L 1 --no-summaries"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 ln)
@@ -19,7 +19,7 @@ Feature: Directories
       """
 
   Scenario: Levels expand subdirectories
-    When I run "mdpeek docs/ --levels 2"
+    When I run "mdpeek docs/ --levels 2 --no-summaries"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 ln)
@@ -37,7 +37,7 @@ Feature: Directories
       """
 
   Scenario: First limits the entries shown in each directory
-    When I run "mdpeek docs -L 2 -n 2"
+    When I run "mdpeek docs -L 2 -n 2 --no-summaries"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 ln)
@@ -50,7 +50,7 @@ Feature: Directories
       """
 
   Scenario: Opening a subdirectory
-    When I run "mdpeek docs/guides --levels 2"
+    When I run "mdpeek docs/guides --levels 2 --no-summaries"
     Then the output is:
       """
       docs/guides/ Guides (4 files, 1 dir, 16 ln)
@@ -70,7 +70,7 @@ Feature: Directories
       ## Added
       ## Fixed
       """
-    When I run "mdpeek notes -L 1"
+    When I run "mdpeek notes -L 1 --no-summaries"
     Then the output is:
       """
       notes/ (1 file, 5 ln)
@@ -119,7 +119,7 @@ Feature: Directories
       """
 
   Scenario: Exclude skips files and directories by name or path
-    When I run "mdpeek docs -L 2 --exclude reference --exclude 'guides/*.md'"
+    When I run "mdpeek docs -L 2 --exclude reference --exclude 'guides/*.md' --no-summaries"
     Then the output is:
       """
       docs/ Handbook (4 files, 2 dirs, 15 ln)
@@ -131,7 +131,7 @@ Feature: Directories
       """
 
   Scenario: Include replaces the default markdown patterns
-    When I run "mdpeek docs -L 3 --include 'tuning.*' --include '*.txt'"
+    When I run "mdpeek docs -L 3 --include 'tuning.*' --include '*.txt' --no-summaries"
     Then the output is:
       """
       docs/ (2 files, 3 dirs, 3 ln)
@@ -175,7 +175,7 @@ Feature: Directories
       """
 
   Scenario: Depth lists each file's headings below its title
-    When I run "mdpeek docs -L 2 -d 1"
+    When I run "mdpeek docs -L 2 -d 1 --no-summaries"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 ln)
@@ -213,7 +213,7 @@ Feature: Directories
       ## Three
       ## Four
       """
-    When I run "mdpeek manual -d 2 -n 2"
+    When I run "mdpeek manual -d 2 -n 2 --no-summaries"
     Then the output is:
       """
       manual/ (1 file, 7 ln)
@@ -232,7 +232,7 @@ Feature: Directories
       ## One
       ### One A
       """
-    When I run "mdpeek manual -d 1"
+    When I run "mdpeek manual -d 1 --no-summaries"
     Then the output is:
       """
       manual/ (1 file, 3 ln)
@@ -324,7 +324,7 @@ Feature: Directories
       make run
       ```
       """
-    When I run "mdpeek flows -d 1"
+    When I run "mdpeek flows -d 1 --no-summaries"
     Then the output is:
       """
       flows/ (1 file, 10 ln)
@@ -414,7 +414,7 @@ Feature: Directories
       | -s orders.md --fences                                     | --fences cannot be combined with -s, --table, --diagram or --fence  |
 
   Scenario: By default the tree expands as far as fits the budget
-    When I run "mdpeek docs"
+    When I run "mdpeek docs --no-summaries"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 ln)
@@ -443,7 +443,7 @@ Feature: Directories
       """
 
   Scenario: The budget expands directory levels before headings
-    When I run "mdpeek docs --budget 13"
+    When I run "mdpeek docs --budget 13 --no-summaries"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 ln)
@@ -466,7 +466,7 @@ Feature: Directories
       """
 
   Scenario: A small budget limits the entries shown
-    When I run "mdpeek docs --budget 4"
+    When I run "mdpeek docs --budget 4 --no-summaries"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 ln)
@@ -480,7 +480,7 @@ Feature: Directories
       """
 
   Scenario: Options given with a budget stay fixed
-    When I run "mdpeek docs --budget 5 -d 1"
+    When I run "mdpeek docs --budget 5 -d 1 --no-summaries"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 ln)
@@ -495,7 +495,7 @@ Feature: Directories
       """
 
   Scenario: When nothing fits, the smallest tree is shown
-    When I run "mdpeek docs --budget 2"
+    When I run "mdpeek docs --budget 2 --no-summaries"
     Then the output is:
       """
       docs/ Handbook (9 files, 3 dirs, 37 ln)

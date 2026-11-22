@@ -161,6 +161,13 @@ def build_parser() -> argparse.ArgumentParser:
         f"({DEFAULT_BUDGET}) unless -L, -d or -n is given, which it otherwise keeps fixed",
     )
     directories.add_argument(
+        "--summaries",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="show each file's one-line summary in trees: front matter summary or "
+        "description, else its first sentence (default on)",
+    )
+    directories.add_argument(
         "--include",
         action="append",
         metavar="GLOB",
@@ -480,11 +487,19 @@ def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
             "or run mdpeek on a file in the directory"
         )
     library = Library.from_path(args.source, include=args.include, exclude=args.exclude)
-    out = ops.tree(library, args.budget, levels=args.levels, depth=args.depth, first=args.first)
+    out = ops.tree(
+        library,
+        args.budget,
+        levels=args.levels,
+        depth=args.depth,
+        first=args.first,
+        summaries=args.summaries,
+    )
     text = _emit(out)
     fit = out.fit
     budget = args.budget or DEFAULT_BUDGET
     if fit is None:
+        _hints(_directory_hints(args, library))
         return text
     if fit.lines > budget:
         print(
@@ -498,7 +513,67 @@ def _show_directory(args: argparse.Namespace, settings: TableSettings) -> str:
             f"{fit.next_step} is {count(fit.next_lines, 'line')}",
             file=sys.stderr,
         )
+    _hints(_directory_hints(args, library))
     return text
+
+
+_PENDING_HINTS: list[str] = []
+
+
+def _hints(pairs: list[tuple[str, str]]) -> None:
+    """Queue next commands worth running; :func:`main` prints them on stderr after
+    the output, as ``mdpeek: next: CMD  (why)``."""
+    for i, (command, why) in enumerate(pairs):
+        label = "next:" if i == 0 else "     "
+        _PENDING_HINTS.append(f"mdpeek: {label} {command}  ({why})")
+
+
+def _write(output: str) -> None:
+    """Write the output, then any queued hints, so hints come last."""
+    sys.stdout.write(output)
+    sys.stdout.flush()
+    for line in _PENDING_HINTS:
+        print(line, file=sys.stderr)
+    _PENDING_HINTS.clear()
+
+
+def _join(source: str, rel: str) -> str:
+    return f"{source.rstrip('/')}/{rel}" if source not in ("", ".") else rel
+
+
+def _directory_hints(args: argparse.Namespace, library: Library) -> list[tuple[str, str]]:
+    src = args.source
+    files = library.files_in_order()
+    pairs = [(f"mdpeek {src} --grep 'term1|term2'", "sections that mention any term, by file")]
+    if files:
+        largest = max(files, key=lambda node: node.line_count)
+        pairs.append((f"mdpeek {_join(src, library.relative(largest))}", "one file"))
+    if args.depth is None:
+        pairs.append((f"mdpeek {src} -d 1 --budget 400", "each file's headings, as far as fits"))
+    tables = sum(len(node.doc.tables) for node in files)
+    if tables:
+        pairs.append((f"mdpeek {src} --tables", f"{count(tables, 'table')} across the files"))
+    return pairs
+
+
+def _file_hints(source: str, doc: Document, view: str | None) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    if view != "whole":
+        sections = [s for s in doc.walk() if not s.is_preamble]
+        top = [s for s in doc.sections if not s.is_preamble]
+        candidates = [s for s in sections if not (len(top) == 1 and s is top[0])] or sections
+        if candidates:
+            biggest = max(candidates, key=lambda s: s.end - s.start)
+            pairs.append(
+                (f"mdpeek {source} -s {biggest.id}", "open a section; add --full for all of it")
+            )
+        pairs.append((f"mdpeek {source} --grep 'term1|term2'", "sections that mention any term"))
+        if view == "top":
+            pairs.append((f"mdpeek {source} --structure", "the whole outline"))
+    if doc.tables:
+        why = f"{count(len(doc.tables), 'table')}; then --table ID or --sql"
+        pairs.append((f"mdpeek {source} --tables", why))
+    return pairs
 
 
 def _meta_from_directory(args: argparse.Namespace) -> str:
@@ -709,6 +784,7 @@ def _table_settings(args: argparse.Namespace) -> TableSettings:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
+    _PENDING_HINTS.clear()
     args = build_parser().parse_args(argv)
     settings = _table_settings(args)
     if args.source != "-" and not is_url(args.source) and os.path.isdir(args.source):
@@ -717,7 +793,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (UsageError, SelectionError, ValueError) as exc:
             print(f"mdpeek: {exc}", file=sys.stderr)
             return EXIT_USAGE
-        sys.stdout.write(output)
+        _write(output)
         return 0
     try:
         text, info = _load(args)
@@ -749,6 +825,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = _show_fences(doc, args)
         elif args.meta:
             output = _show_meta(doc, args)
+        elif args.mode is Mode.VIEW and args.depth is None and not args.section:
+            first_look = ops.adaptive(doc, DEFAULT_BUDGET, settings, args.diagram_summaries)
+            output = _emit(first_look)
+            _hints(_file_hints(args.source, doc, first_look.view))
         else:
             output = render(
                 doc, args.mode, args.depth, args.section, settings, args.diagram_summaries
@@ -772,5 +852,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"mdpeek: {cached}", file=sys.stderr)  # keep data output parseable
     elif cached:
         output = f"{cached}\n{output}"
-    sys.stdout.write(output)
+    _write(output)
     return 0
