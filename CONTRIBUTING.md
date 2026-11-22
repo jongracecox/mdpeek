@@ -86,9 +86,12 @@ See [CLAUDE.md](CLAUDE.md) for architecture and conventions.
 ## Claude Code plugin
 
 `.claude-plugin/marketplace.json` makes the repository a plugin marketplace;
-the plugin itself lives in `plugin/` (`plugin/skills/mdpeek/SKILL.md`). Keep
-the skill short: when to reach for mdpeek and the basic loop. The full
-command guide belongs in mdpeek itself, not in the skill. `plugin.json` has
+the plugin itself lives in `plugin/`, with two skills:
+`plugin/skills/mdpeek/SKILL.md` (when to reach for mdpeek and the basic loop)
+and `plugin/skills/doc-search/SKILL.md` (a research strategy for doc
+libraries). Keep both short. The full command guide belongs in mdpeek itself,
+not in the skills. `doc-search` was tuned against agent benchmarks: a change
+to its strategy steps should be re-measured, not just reworded. `plugin.json` has
 no `version` on purpose, so installs track the git commit.
 
 ```sh

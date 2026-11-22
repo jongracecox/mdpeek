@@ -367,16 +367,38 @@ $ mdpeek report.md --sql "select region from t4 where growth > 0.1"
 
 ## Claude Code plugin
 
-This repository is also a Claude Code plugin marketplace. The plugin adds a
-skill that tells Claude to use mdpeek on large markdown files, docs URLs and
-markdown directories instead of reading them whole:
+This repository is also a Claude Code plugin marketplace. The plugin adds two
+skills:
+
+- **`mdpeek`**: use mdpeek on large markdown files, docs URLs and markdown
+  directories instead of reading them whole.
+- **`doc-search`**: a strategy for answering questions from a documentation
+  library, where the answer is often split across several files. Survey the
+  whole library with mdpeek, search wide, read the relevant files with the
+  usual tools, chase caveats and later changes into other documents, and
+  check every part of the question before answering.
 
 ```text
 /plugin marketplace add jongracecox/mdpeek
 /plugin install mdpeek@mdpeek
 ```
 
-The skill needs `mdpeek` on your `PATH` (any install method above), or falls
+To have Claude use `doc-search` without being asked, add this to your
+`CLAUDE.md`:
+
+```markdown
+## Documentation
+
+When answering a question from a documentation directory you haven't searched
+before, use the doc-search skill first.
+```
+
+In testing on a 175-file library, agents with this note loaded the skill in
+nearly every session. They answered more of each question correctly than with
+the same tools and no skill, and more than with a one-line "use mdpeek" hint,
+which made them stop searching sooner.
+
+The skills need `mdpeek` on your `PATH` (any install method above), or fall
 back to `uvx mdpeek`.
 
 ## MCP server
